@@ -113,6 +113,13 @@ The Logseq manifest declares `supportsDBOnly: true`. The plugin uses the current
 The full adversarial acceptance matrix and final production invariants are in
 [the v0.6.0 release gate](docs/release-gate-v0.6.0.md).
 
+## Maintaining and extending
+
+Coding agents and human contributors should begin with
+[AGENTS.md](AGENTS.md). Claude Code also receives the same contract through
+[CLAUDE.md](CLAUDE.md). The detailed architecture-to-release playbook is
+[Maintaining and Extending Home OS](docs/maintaining-and-extending.md).
+
 ## Current beta boundary
 
 Logseq 2.x nightlies currently expose a validator/UUID conversion mismatch for plugin-scoped native closed choices. Home OS therefore verifies six enumerated fields as documented value sets while keeping their names and semantics stable. All tags, inheritance, typed properties, node ranges, and tag-property attachments are native DB structure. No raw database workaround is used.
