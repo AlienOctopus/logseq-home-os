@@ -94,6 +94,42 @@ The processor must inspect every supplied nameplate or identifier photo at origi
 
 The generated subtree begins with an exact nested capture example and groups navigation into `Your home`, `Rooms & areas`, `Appliances & equipment`, `Home systems`, `Manuals & records`, and `Inbox & review`. Every type heading links to its native Logseq tag page, whose built-in views remain the live table of record. Durable links use a short final-segment label while preserving their exact page target. The dashboard may list only real durable pages returned by each tag; it must not pre-create imaginary rooms, appliances, systems, or documents.
 
+## Canonical record title and search rule
+
+Every durable record page title begins with exactly one fixed type marker,
+followed by a space:
+
+- `🏠 My home` — `HM Home`
+- `📍 My home · Basement` — `HM Space`
+- `⚙️ My home · HVAC` — `HM System`
+- `🟢 Refrigerator — Whirlpool WRS325SDHZ · Basement · My home`
+- `📄 My home · Basement · Refrigerator warranty` — `HM Document`
+
+The markers have one stable meaning: the page is a canonical durable record of
+that type. They are not lifecycle, verification, or online/offline statuses.
+In global appliance search, users ignore every other match and open the one
+result whose visible title or breadcrumb starts with `🟢`. Logseq can surface
+both the Item page and a matching child on that page; both green hits resolve
+inside the same canonical Item. A containing room may match because its
+generated index names the item, but that result starts with `📍`. Generated
+dashboard and relationship-index aliases strip markers and show only compact
+human labels.
+
+Item titles are deliberately search-first:
+`🟢 <ordinary object noun> — <manufacturer model> · <space> · <home>`. The
+ordinary term appears immediately after the marker so direct title matching
+ranks well. This is presentation, not hierarchy. `hm-home`, `hm-location`, and
+the other typed relationships remain authoritative. Exact identifier text
+belongs in `hm-model`; the visible title replaces ASCII `/` with `∕` so a model
+suffix cannot be interpreted as a Logseq namespace.
+
+The helper treats every marker variant and the legacy unmarked form as one
+proposed identity during ownership preflight. Before materialization or
+dashboard refresh, it plans an owned-page-only migration, stops on any target
+collision, saves an official graph export, renames by page UUID through the
+supported Logseq API, and verifies that every UUID is unchanged. A human page
+at the target title is never taken over.
+
 Logseq DB releases may return either title-backed or UUID-backed page-reference text through the API. Dashboard idempotency therefore compares both exact human-authored aliases and their canonical UUID variants.
 
 ## Durable-page index rule
@@ -108,7 +144,7 @@ Native linked references are provenance and graph context; they are not the prim
 
 Each projection root carries `#HM Generated`. Home OS may replace or remove only that generated subtree, saves an official graph export before stale generated links are removed, and preserves every human-authored sibling. Empty categories are omitted. An empty Home or Space gets one actionable capture hint; empty System, Item, and Document projections are omitted entirely. Projection links are navigation only: the typed properties and durable record pages remain the single source of truth.
 
-Use `My home` as the fallback home nickname when the owner has not supplied one. Avoid the generic durable page title `Home`, which can collide with Logseq's native Home concept or an existing `#home` tag.
+Use `My home` as the fallback home nickname when the owner has not supplied one. Avoid the generic durable page title `🏠 Home`, which can still be confused with Logseq's native Home concept or an existing `#home` tag.
 
 ## Human labels
 

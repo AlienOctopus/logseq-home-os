@@ -1,6 +1,6 @@
 {
   "name": "logseq-home-os-capture",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Event-driven #HomeCapture notifier for Logseq Home OS",
   "main": "index.html",
   "scripts": {

@@ -25,6 +25,13 @@ The same flow produced this real, linked appliance record from a three-child ref
 
 ![Structured refrigerator record in Logseq](docs/media/home-os-record-ux-after-public.png)
 
+Search is intentionally unambiguous: the canonical appliance or equipment
+record starts with `🟢`. Search for an ordinary word such as `microwave`, then
+open the green result. A room that mentions the microwave starts with `📍`;
+captures, evidence, notes, and citations have no canonical type marker.
+
+![Canonical Home OS record in Logseq search](docs/media/home-os-search-canonical-v0.7.0.png)
+
 ## What this repository contains
 
 - A DB-graph-only Logseq plugin with one connected-H Home OS action, a native dashboard, guided first-run setup, and explicit processing feedback.
@@ -33,6 +40,7 @@ The same flow produced this real, linked appliance record from a three-child ref
 - A narrow `materialize` contract that rejects stale fingerprints and unapproved schema values before writing.
 - A first-class, privacy-sensitive `hm-serial` field on each Item record, with mandatory nameplate inspection, explicit captured/unavailable dispositions, conflict protection, and a value-free coverage audit.
 - Relationship-driven main-body indexes for homes, rooms, systems, items, and documents; empty categories disappear and human-authored page content remains untouched.
+- A single search affordance: `🟢` always marks the canonical appliance or equipment record, while `🏠`, `📍`, `⚙️`, and `📄` distinguish the other durable record types.
 - Ownership and integrity gates that reject page collisions, multiple record kinds, parent-space cycles, home/location mismatches, unsafe URLs, and conflicting one-to-one relationships.
 - A privacy audit plus ephemeral Codex transcripts: only sanitized, deduplicated machine receipts persist; crash recovery removes orphan transcripts/processes and runs have a hard timeout.
 - Repeatable install, health, backup, verification, reinstall, and uninstall commands.
@@ -77,6 +85,7 @@ node skills/logseq-home-os/scripts/home-os.mjs doctor
 node skills/logseq-home-os/scripts/home-os.mjs schema-plan
 node skills/logseq-home-os/scripts/home-os.mjs schema-verify
 node skills/logseq-home-os/scripts/home-os.mjs dashboard
+node skills/logseq-home-os/scripts/home-os.mjs canonical-title-audit
 node skills/logseq-home-os/scripts/home-os.mjs serial-audit
 node skills/logseq-home-os/scripts/home-os.mjs record-audit
 node skills/logseq-home-os/scripts/home-os.mjs privacy-audit
@@ -111,7 +120,7 @@ The repository includes both distribution surfaces:
 The Logseq manifest declares `supportsDBOnly: true`. The plugin uses the current DB SDK and is not designed for legacy file graphs.
 
 The full adversarial acceptance matrix and final production invariants are in
-[the v0.6.0 release gate](docs/release-gate-v0.6.0.md).
+[the v0.7.0 release gate](docs/release-gate-v0.7.0.md).
 
 ## Maintaining and extending
 

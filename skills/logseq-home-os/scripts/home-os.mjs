@@ -25,7 +25,15 @@ const LAUNCH_AGENT_PATH = path.join(os.homedir(), "Library", "LaunchAgents", `${
 const DEFAULT_API_URL = "http://127.0.0.1:12315/api";
 const DEFAULT_BRIDGE_PORT = 32145;
 const HOME_OS_SCHEMA_VERSION = "2";
-const HOME_OS_GENERATOR_VERSION = "home-os/0.6.0";
+const HOME_OS_GENERATOR_VERSION = "home-os/0.7.0";
+const HOME_OS_DURABLE_KINDS = new Set(["HM Home", "HM Space", "HM System", "HM Item", "HM Document"]);
+const HOME_OS_KIND_MARKERS = new Map([
+  ["HM Home", "🏠"],
+  ["HM Space", "📍"],
+  ["HM System", "⚙️"],
+  ["HM Item", "🟢"],
+  ["HM Document", "📄"],
+]);
 const HOME_OS_DASHBOARD_TITLE = "Home OS";
 const HOME_OS_DASHBOARD_ROOT = "Your home at a glance";
 const HOME_OS_DASHBOARD_ROOT_LEGACY = ["Home OS dashboard"];
@@ -429,6 +437,13 @@ async function referenceIds(config, node, key) {
       ids.push(inlineId);
       continue;
     }
+    const inlineTitle = displayNodeTitle(value);
+    if (inlineTitle) {
+      const referenced = await exactNodeByTitle(config, inlineTitle);
+      const resolvedId = valueAt(referenced, ["id", "db/id", ":db/id"]);
+      if (resolvedId != null) ids.push(resolvedId);
+      continue;
+    }
     if (typeof value !== "string") continue;
     const referenced = /^[0-9a-f-]{36}$/i.test(value)
       ? await rpc(config, "logseq.Editor.getBlock", [value, { includeChildren: false }])
@@ -439,19 +454,34 @@ async function referenceIds(config, node, key) {
   return [...new Set(ids)];
 }
 
-async function fillMissingSingleReference(config, node, key, target, label) {
+async function fillMissingSingleReference(config, node, key, target, label, { allowTitleOnly = false } = {}) {
   if (!target) return { key, outcome: "not-provided" };
   const targetId = valueAt(target, ["id", "db/id", ":db/id"]);
   if (targetId == null) fail(`Could not resolve ${label}`, { key });
   const existingIds = await referenceIds(config, node, key);
+  if (allowTitleOnly && existingIds.length === 0) {
+    const existingNodes = await referencedNodes(config, node, key);
+    const targetTitle = displayNodeTitle(target);
+    if (
+      targetTitle
+      && existingNodes.length === 1
+      && displayNodeTitle(existingNodes[0]) === targetTitle
+    ) {
+      return { key, outcome: "already-matched" };
+    }
+  }
   if (existingIds.length === 0) {
     await setProperty(config, node, key, targetId);
     return { key, outcome: "added" };
   }
-  if (existingIds.length === 1 && existingIds[0] === targetId) return { key, outcome: "already-matched" };
+  if (existingIds.length === 1 && String(existingIds[0]) === String(targetId)) {
+    return { key, outcome: "already-matched" };
+  }
   fail(`Home OS will not overwrite an existing ${label}`, {
     recordUuid: node.uuid,
     property: key,
+    proposedId: targetId,
+    existingIds,
     next: "Review the existing relationship in Logseq and change it deliberately before reprocessing this capture.",
   });
 }
@@ -460,7 +490,9 @@ async function appendReference(config, node, key, target, label) {
   const targetId = valueAt(target, ["id", "db/id", ":db/id"]);
   if (targetId == null) fail(`Could not resolve ${label}`, { key });
   const existingIds = await referenceIds(config, node, key);
-  if (existingIds.includes(targetId)) return { key, outcome: "already-matched" };
+  if (existingIds.some((id) => String(id) === String(targetId))) {
+    return { key, outcome: "already-matched" };
+  }
   await setProperty(config, node, key, [...existingIds, targetId], { reset: true });
   return { key, outcome: "added" };
 }
@@ -763,20 +795,93 @@ function displayNodeTitle(node) {
   return String(title).toLowerCase() === "home" ? "Home" : String(title);
 }
 
+function unmarkedRecordTitle(title) {
+  let unmarked = String(title ?? "").trim();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const marker of HOME_OS_KIND_MARKERS.values()) {
+      if (!unmarked.startsWith(marker)) continue;
+      unmarked = unmarked.slice(marker.length).trimStart();
+      changed = true;
+      break;
+    }
+  }
+  return unmarked.trim();
+}
+
+function recordMarker(kind) {
+  const marker = HOME_OS_KIND_MARKERS.get(kind);
+  if (!marker) fail("Home OS durable record kind has no search marker", { kind });
+  return marker;
+}
+
+function canonicalRecordTitle(title, kind) {
+  const unmarked = unmarkedRecordTitle(title);
+  const marker = recordMarker(kind);
+  return unmarked ? `${marker} ${unmarked}` : marker;
+}
+
+function equivalentRecordTitles(left, right) {
+  return unmarkedRecordTitle(left) === unmarkedRecordTitle(right);
+}
+
 function regexEscape(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function itemDashboardLabel(title, manufacturer, model) {
-  const original = shortDashboardLabel(title);
-  let kind = original;
+function itemKindLabel(title, manufacturer, model) {
+  const unmarked = unmarkedRecordTitle(title);
+  const identitySegment = unmarked.includes(" — ")
+    ? unmarked.split(" — ")[0].trim()
+    : (unmarked.split(" · ").map((part) => part.trim()).filter(Boolean).at(-1) || unmarked);
+  let kind = identitySegment;
   for (const value of [manufacturer, model, model?.split("/")[0]].filter(Boolean)) {
     kind = kind.replace(new RegExp(regexEscape(value), "i"), " ");
   }
   kind = kind.replace(/\s+/g, " ").replace(/^[·\-–—\s]+|[·\-–—\s]+$/g, "").trim();
+  return kind || identitySegment || "Item";
+}
+
+function itemDashboardLabel(title, manufacturer, model) {
+  const original = unmarkedRecordTitle(title);
+  const kind = itemKindLabel(title, manufacturer, model);
   const identity = [manufacturer, kind].filter(Boolean).join(" ").trim();
   if (!identity) return original;
   return model ? `${identity} · ${model}` : identity;
+}
+
+function itemTitleText(value) {
+  return String(value ?? "")
+    .replaceAll("/", "∕")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function canonicalItemSearchTitle({ title, manufacturer, model, homeTitle, spaceTitle }) {
+  const unmarked = unmarkedRecordTitle(title);
+  if (unmarked.includes(" — ")) return canonicalRecordTitle(itemTitleText(unmarked), "HM Item");
+  const kind = itemTitleText(itemKindLabel(unmarked, manufacturer, model));
+  const identity = [manufacturer, model].filter(Boolean).map(itemTitleText).join(" ").trim();
+  const place = [
+    spaceTitle ? shortDashboardLabel(spaceTitle) : null,
+    homeTitle ? shortDashboardLabel(homeTitle) : null,
+  ].filter(Boolean).map(itemTitleText).filter((value, index, values) => values.indexOf(value) === index).join(" · ");
+  const base = [
+    kind,
+    identity ? `— ${identity}` : null,
+    place ? `· ${place}` : null,
+  ].filter(Boolean).join(" ");
+  return canonicalRecordTitle(base, "HM Item");
+}
+
+function materializationEvidenceLabel(record) {
+  if (record.kind !== "HM Item") return shortDashboardLabel(record.title);
+  return [record.manufacturer, record.model, itemKindLabel(record.title, record.manufacturer, record.model)]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 }
 
 async function dashboardRecords(config, tagTitle) {
@@ -823,8 +928,9 @@ async function serialCoverage(config) {
 }
 
 function shortDashboardLabel(title) {
-  const parts = String(title).split(" · ").map((part) => part.trim()).filter(Boolean);
-  return (parts.at(-1) || String(title)).replaceAll("[", "〔").replaceAll("]", "〕");
+  const unmarked = unmarkedRecordTitle(title);
+  const parts = unmarked.split(" · ").map((part) => part.trim()).filter(Boolean);
+  return (parts.at(-1) || unmarked).replaceAll("[", "〔").replaceAll("]", "〕");
 }
 
 function dashboardReference(node) {
@@ -904,12 +1010,14 @@ async function durableRecordCatalog(config, { allowKindConflicts = false } = {})
       const title = displayNodeTitle(node);
       if (!title) continue;
       let label = shortDashboardLabel(title);
+      let manufacturer = null;
+      let model = null;
       if (kind === "HM Item") {
-        const manufacturer = await propertyText(config, node, "hm-manufacturer");
-        const model = await propertyText(config, node, "hm-model");
+        manufacturer = await propertyText(config, node, "hm-manufacturer");
+        model = await propertyText(config, node, "hm-model");
         label = itemDashboardLabel(title, manufacturer, model);
       }
-      catalog.push({ ...nodeIdentity(node), title, label, kind, node });
+      catalog.push({ ...nodeIdentity(node), title, label, kind, manufacturer, model, node });
     }
   }
   const sorted = catalog.sort((a, b) => a.label.localeCompare(b.label));
@@ -1117,6 +1225,19 @@ function referencesFromCatalog(record, key, catalog, kind = null) {
   )));
 }
 
+function canonicalRecordTitleForCatalogRecord(record, catalog) {
+  if (record.kind !== "HM Item") return canonicalRecordTitle(record.title, record.kind);
+  const home = referencesFromCatalog(record, "hm-home", catalog, "HM Home")[0] ?? null;
+  const space = referencesFromCatalog(record, "hm-location", catalog, "HM Space")[0] ?? null;
+  return canonicalItemSearchTitle({
+    title: record.title,
+    manufacturer: record.manufacturer,
+    model: record.model,
+    homeTitle: home?.title ?? null,
+    spaceTitle: space?.title ?? null,
+  });
+}
+
 function integrityFindingsForCatalog(catalog) {
   const errors = [];
   const warnings = [];
@@ -1131,6 +1252,28 @@ function integrityFindingsForCatalog(catalog) {
     if (kinds.length > 1) errors.push({ type: "multiple-durable-kinds", uuid: entries[0].uuid, title: entries[0].title, kinds });
   }
   const records = [...byUuid.values()].map((entries) => entries[0]);
+  const byCanonicalTitle = new Map();
+  for (const record of records) {
+    const identity = unmarkedRecordTitle(canonicalRecordTitleForCatalogRecord(record, records));
+    const entries = byCanonicalTitle.get(identity) ?? [];
+    entries.push(record);
+    byCanonicalTitle.set(identity, entries);
+  }
+  for (const [identity, entries] of byCanonicalTitle) {
+    const uuids = [...new Set(entries.map((entry) => entry.uuid))];
+    if (uuids.length > 1) {
+      errors.push({
+        type: "duplicate-canonical-record-title",
+        identity,
+        records: entries.map((entry) => ({
+          uuid: entry.uuid,
+          title: entry.title,
+          kind: entry.kind,
+          canonicalTitle: canonicalRecordTitleForCatalogRecord(entry, records),
+        })),
+      });
+    }
+  }
   const spaces = records.filter((record) => record.kind === "HM Space");
 
   for (const record of records) {
@@ -1194,13 +1337,145 @@ async function recordIntegrityAudit(config) {
   await assertGraph(config);
   const catalog = await durableRecordCatalog(config, { allowKindConflicts: true });
   const findings = integrityFindingsForCatalog(catalog);
+  const evidence = await rpc(config, "logseq.Editor.getTagObjects", ["HM Evidence"]);
+  const fingerprints = new Map();
+  for (const node of Array.isArray(evidence) ? evidence : []) {
+    if (!node?.uuid) continue;
+    const fingerprint = await propertyText(config, node, "hm-source-fingerprint");
+    if (!fingerprint) continue;
+    const entries = fingerprints.get(fingerprint) ?? [];
+    entries.push({ uuid: node.uuid, title: displayNodeTitle(node) });
+    fingerprints.set(fingerprint, entries);
+  }
+  for (const [fingerprint, entries] of fingerprints) {
+    if (entries.length < 2) continue;
+    findings.errors.push({
+      type: "duplicate-source-fingerprint",
+      fingerprint,
+      evidence: entries,
+    });
+  }
   return {
     ok: findings.errors.length === 0,
     recordCount: findings.recordCount,
+    evidenceCount: Array.isArray(evidence) ? evidence.length : 0,
     errorCount: findings.errors.length,
     warningCount: findings.warnings.length,
     errors: findings.errors,
     warnings: findings.warnings,
+  };
+}
+
+async function canonicalRecordTitlePlan(config) {
+  await assertGraph(config);
+  const catalog = await durableRecordCatalog(config);
+  const migrations = [];
+  const conflicts = [];
+  for (const record of catalog) {
+    const targetTitle = canonicalRecordTitleForCatalogRecord(record, catalog);
+    if (record.title === targetTitle) continue;
+    const targetPage = await rpc(config, "logseq.Editor.getPage", [targetTitle]);
+    if (targetPage?.uuid && targetPage.uuid !== record.uuid) {
+      conflicts.push({
+        type: "page",
+        sourceUuid: record.uuid,
+        sourceTitle: record.title,
+        targetUuid: targetPage.uuid,
+        targetTitle,
+      });
+      continue;
+    }
+    const collision = await exactNodeByTitle(config, targetTitle);
+    if (collision && collision.uuid !== record.uuid) {
+      conflicts.push({
+        type: "node",
+        sourceUuid: record.uuid,
+        sourceTitle: record.title,
+        targetUuid: collision.uuid,
+        targetTitle,
+      });
+      continue;
+    }
+    migrations.push({
+      uuid: record.uuid,
+      kind: record.kind,
+      from: record.title,
+      to: targetTitle,
+    });
+  }
+  return {
+    ok: conflicts.length === 0,
+    ready: migrations.length === 0 && conflicts.length === 0,
+    markers: Object.fromEntries(HOME_OS_KIND_MARKERS),
+    recordCount: catalog.length,
+    pendingCount: migrations.length,
+    conflictCount: conflicts.length,
+    migrations,
+    conflicts,
+  };
+}
+
+async function saveCanonicalTitleBackup(config) {
+  const exported = await rpc(config, "logseq.App.export_edn", [{ exportType: "graph" }]);
+  const body = valueAt(exported, ["export-body", "exportBody"]);
+  if (typeof body !== "string" || body.length === 0) fail("Logseq returned an empty graph export", exported);
+  const directory = path.join(config.graphPath, ".logseq-agent-audit", "backups");
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const backupPath = path.join(directory, `home-os-before-canonical-title-migration-${timestampForFilename()}.transit.json`);
+  fs.writeFileSync(backupPath, body, { mode: 0o600 });
+  return {
+    path: backupPath,
+    sha256: createHash("sha256").update(body).digest("hex"),
+    bytes: Buffer.byteLength(body),
+  };
+}
+
+async function ensureCanonicalRecordTitles(config) {
+  const plan = await canonicalRecordTitlePlan(config);
+  if (!plan.ok) {
+    fail("Home OS cannot add canonical record markers because a target title is already in use", {
+      markers: Object.fromEntries(HOME_OS_KIND_MARKERS),
+      conflicts: plan.conflicts,
+      next: "Rename the conflicting human page or block, then open Home OS again.",
+    });
+  }
+  if (plan.pendingCount === 0) return { ...plan, migratedCount: 0, backup: null };
+  const backup = await saveCanonicalTitleBackup(config);
+  const migrated = [];
+  try {
+    for (const migration of plan.migrations) {
+      // Logseq 2.x DB pages are node-identified. The current DB line rejects
+      // the legacy title-form first argument with "Invalid page uuid".
+      await rpc(config, "logseq.Editor.renamePage", [migration.uuid, migration.to]);
+      const page = await rpc(config, "logseq.Editor.getPage", [migration.to]);
+      if (!page?.uuid || page.uuid !== migration.uuid) {
+        fail("Home OS could not verify a canonical record title migration", { migration, backup });
+      }
+      migrated.push(migration);
+    }
+  } catch (error) {
+    fail("Home OS stopped during canonical record title migration", {
+      error: error.message,
+      details: error.details,
+      migrated,
+      backup,
+      next: "Run canonical-title-audit before retrying. Already migrated page UUIDs remain valid.",
+    });
+  }
+  const verification = await canonicalRecordTitlePlan(config);
+  if (!verification.ready) fail("Home OS canonical record title verification did not pass", { verification, backup });
+  await audit({
+    type: "canonical-record-title-migration",
+    markers: Object.fromEntries(HOME_OS_KIND_MARKERS),
+    migratedCount: migrated.length,
+    recordUuids: migrated.map((migration) => migration.uuid),
+    backup: { path: backup.path, sha256: backup.sha256, bytes: backup.bytes },
+  });
+  return {
+    ...verification,
+    migratedCount: migrated.length,
+    migrated,
+    backup,
   };
 }
 
@@ -1366,6 +1641,7 @@ async function ensureDashboard(config) {
   if (!readiness.ready) fail("Home OS schema is not ready for the dashboard", readiness);
   const integrity = await recordIntegrityAudit(config);
   if (!integrity.ok) fail("Home OS record relationships need review before the dashboard can be refreshed", integrity);
+  const canonicalTitles = await ensureCanonicalRecordTitles(config);
 
   let dashboardPage = await rpc(config, "logseq.Editor.getPage", [HOME_OS_DASHBOARD_TITLE]);
   let pageCreated = false;
@@ -1517,6 +1793,11 @@ async function ensureDashboard(config) {
     "A full photo plus a clear model-and-serial label gives Home OS the best chance of identifying the item.",
     ["On the Mac, run `Home OS: Process new captures` from the command palette."],
   );
+  await ensureDashboardChild(
+    config,
+    tips.node.uuid,
+    `In search, ${recordMarker("HM Item")} marks the canonical appliance or equipment record.`,
+  );
 
   const status = await dashboardStatus(config);
   if (!status.ready) fail("Home OS dashboard verification failed", status);
@@ -1532,6 +1813,7 @@ async function ensureDashboard(config) {
       removedCount: cleanup.removed.length,
       backup: cleanup.backup,
     },
+    canonicalTitles,
     pageIndexes,
   };
 }
@@ -1610,7 +1892,22 @@ function validateMaterialization(payload) {
   const observations = textList(evidence.observations, "evidence.observations");
   const uncertainties = textList(evidence.uncertainties, "evidence.uncertainties");
   const generated = textList(record.generated, "record.generated");
-  const title = requireText(record.title, "record.title", { max: 300 });
+  const rawTitle = requireText(record.title, "record.title", { max: 300 });
+  const rawHomeTitle = optionalText(record.homeTitle, "record.homeTitle", { max: 200 });
+  const homeTitle = rawHomeTitle
+    ? requireText(canonicalRecordTitle(rawHomeTitle, "HM Home"), "record.homeTitle", { max: 200 })
+    : null;
+  const rawSpaceTitle = optionalText(record.spaceTitle, "record.spaceTitle", { max: 250 });
+  const spaceTitle = rawSpaceTitle
+    ? requireText(canonicalRecordTitle(rawSpaceTitle, "HM Space"), "record.spaceTitle", { max: 250 })
+    : null;
+  const title = requireText(
+    recordKind === "HM Item"
+      ? canonicalItemSearchTitle({ title: rawTitle, manufacturer, model, homeTitle, spaceTitle })
+      : canonicalRecordTitle(rawTitle, recordKind),
+    "record.title",
+    { max: 300 },
+  );
   if (serial) {
     const sensitiveValue = serial.toLocaleLowerCase();
     const publicText = [
@@ -1640,8 +1937,8 @@ function validateMaterialization(payload) {
     record: {
       kind: recordKind,
       title,
-      homeTitle: optionalText(record.homeTitle, "record.homeTitle", { max: 200 }),
-      spaceTitle: optionalText(record.spaceTitle, "record.spaceTitle", { max: 250 }),
+      homeTitle,
+      spaceTitle,
       category,
       manufacturer,
       model,
@@ -1676,7 +1973,42 @@ async function preflightOwnedPage(config, title, expectedKind, role) {
       next: "Rename the existing block or choose a more specific Home OS title.",
     });
   }
+  if (HOME_OS_DURABLE_KINDS.has(expectedKind)) {
+    const legacyTitle = unmarkedRecordTitle(title);
+    if (legacyTitle && legacyTitle !== title) {
+      const legacyPage = await rpc(config, "logseq.Editor.getPage", [legacyTitle]);
+      if (legacyPage?.uuid) {
+        const tags = await nodeTagTitles(config, legacyPage.uuid);
+        const durableKinds = tags.filter((tag) => HOME_OS_DURABLE_KINDS.has(tag));
+        if (tags.includes(expectedKind) || durableKinds.length > 0) {
+          await assertRecordKind(config, legacyPage, expectedKind, role);
+          const current = await rpc(config, "logseq.Editor.getPage", [legacyPage.uuid, { includeChildren: false }]);
+          const properties = await rpc(config, "logseq.Editor.getPageProperties", [legacyPage.uuid]);
+          return { ...(current?.uuid ? current : legacyPage), ...(properties && typeof properties === "object" ? properties : {}) };
+        }
+      }
+    }
+  }
   return null;
+}
+
+async function evidencePageForFingerprint(config, fingerprint) {
+  const objects = await rpc(config, "logseq.Editor.getTagObjects", ["HM Evidence"]);
+  const matches = [];
+  for (const node of Array.isArray(objects) ? objects : []) {
+    if (!node?.uuid) continue;
+    const stored = await propertyText(config, node, "hm-source-fingerprint");
+    if (stored !== fingerprint) continue;
+    matches.push(node);
+  }
+  if (matches.length > 1) {
+    fail("Home OS found multiple source reviews for one capture fingerprint", {
+      fingerprint,
+      evidence: matches.map((node) => ({ uuid: node.uuid, title: displayNodeTitle(node) })),
+      next: "Review the duplicate source reviews before reprocessing. Home OS will not choose one silently.",
+    });
+  }
+  return matches[0] ?? null;
 }
 
 async function referencedNodes(config, node, key) {
@@ -1684,17 +2016,27 @@ async function referencedNodes(config, node, key) {
   const entry = propertyEntry(node, key);
   if (!entry) return nodes;
   for (const value of propertyReferenceValues(entry[1])) {
-    if (value && typeof value === "object" && (value.uuid || displayNodeTitle(value))) {
+    const inline = nodeIdentity(value);
+    if (value && typeof value === "object" && inline.uuid) {
       nodes.push(value);
+      continue;
+    }
+    if (value && typeof value === "object" && inline.id != null) {
+      const target = await rpc(config, "logseq.Editor.getBlock", [inline.id, { includeChildren: false }]);
+      if (nodeIdentity(target).uuid) nodes.push(target);
+      continue;
+    }
+    if (value && typeof value === "object" && inline.title) {
+      nodes.push((await exactNodeByTitle(config, inline.title)) ?? value);
       continue;
     }
     if (typeof value === "string" && !/^[0-9a-f-]{36}$/i.test(value)) {
       const target = await rpc(config, "logseq.Editor.getPage", [value]);
-      nodes.push(target?.uuid ? target : { title: value });
+      nodes.push(nodeIdentity(target).uuid ? target : { title: value });
       continue;
     }
     const target = await rpc(config, "logseq.Editor.getBlock", [value, { includeChildren: false }]);
-    if (target?.uuid) nodes.push(target);
+    if (nodeIdentity(target).uuid) nodes.push(target);
   }
   return nodes;
 }
@@ -1703,7 +2045,7 @@ async function assertReferenceTitleCompatible(config, node, key, proposedTitle, 
   if (!node || !proposedTitle) return;
   const existing = await referencedNodes(config, node, key);
   if (existing.length === 0) return;
-  if (existing.length === 1 && displayNodeTitle(existing[0]) === proposedTitle) return;
+  if (existing.length === 1 && equivalentRecordTitles(displayNodeTitle(existing[0]), proposedTitle)) return;
   fail(`Home OS will not overwrite an existing ${label}`, {
     recordUuid: node.uuid,
     property: key,
@@ -1711,14 +2053,26 @@ async function assertReferenceTitleCompatible(config, node, key, proposedTitle, 
   });
 }
 
-async function assertReferenceUuidCompatible(config, node, key, proposedUuid, label) {
+async function assertReferenceUuidCompatible(
+  config,
+  node,
+  key,
+  proposedUuid,
+  label,
+  { proposedTitle = null, allowTitleOnly = false } = {},
+) {
   if (!node || !proposedUuid) return;
   const existing = await referencedNodes(config, node, key);
   if (existing.length === 0) return;
-  if (existing.length === 1 && existing[0].uuid === proposedUuid) return;
+  const identities = existing.map(nodeIdentity);
+  if (identities.length === 1 && identities[0].uuid === proposedUuid) return;
+  if (allowTitleOnly && proposedTitle && identities.length === 1 && identities[0].title === proposedTitle) return;
   fail(`Home OS will not overwrite an existing ${label}`, {
     recordUuid: node.uuid,
     property: key,
+    proposedUuid,
+    proposedTitle,
+    existing: identities,
     next: "Review the existing relationship in Logseq and change it deliberately before reprocessing this capture.",
   });
 }
@@ -1755,7 +2109,17 @@ async function preflightMaterialization(config, payload, capture, evidenceTitle)
     if (storedFingerprint && storedFingerprint !== payload.sourceFingerprint) {
       fail("An existing source review has a different capture fingerprint", { evidenceUuid: evidence.uuid });
     }
-    await assertReferenceUuidCompatible(config, evidence, "hm-source-capture", capture.uuid, "source-capture relationship");
+    // Logseq DB currently serializes this block reference as a title-only object
+    // over the desktop HTTP API. The matching source fingerprint above makes the
+    // exact-title fallback safe while still refusing a different capture.
+    await assertReferenceUuidCompatible(
+      config,
+      evidence,
+      "hm-source-capture",
+      capture.uuid,
+      "source-capture relationship",
+      { proposedTitle: displayNodeTitle(capture), allowTitleOnly: true },
+    );
     await assertReferenceTitleCompatible(config, evidence, "hm-proposed-record", payload.record.title, "proposed-record relationship");
   }
   return { home, space, durable, evidence };
@@ -1775,7 +2139,10 @@ async function materialize(config, inputPath) {
   if (capture.fingerprint !== payload.sourceFingerprint) fail("The capture changed after interpretation; re-scan before materializing", { expected: payload.sourceFingerprint, actual: capture.fingerprint });
   const captureId = valueAt(capture.tree, ["id", "db/id", ":db/id"]);
   if (!captureId) fail("Could not resolve the source capture node ID", { captureUuid: payload.captureUuid });
-  const evidenceTitle = `Source review · ${shortDashboardLabel(payload.record.title)} · ${payload.sourceFingerprint.slice(0, 6)}`;
+  const proposedEvidenceTitle = `Source review · ${materializationEvidenceLabel(payload.record)} · ${payload.sourceFingerprint.slice(0, 6)}`;
+  const existingEvidence = await evidencePageForFingerprint(config, payload.sourceFingerprint);
+  const evidenceTitle = existingEvidence ? displayNodeTitle(existingEvidence) : proposedEvidenceTitle;
+  const canonicalTitles = await ensureCanonicalRecordTitles(config);
   await preflightMaterialization(config, payload, capture.tree, evidenceTitle);
 
   const home = payload.record.homeTitle ? await ensurePage(config, payload.record.homeTitle) : null;
@@ -1815,7 +2182,14 @@ async function materialize(config, inputPath) {
     await addTag(config, evidence.node, "HM Evidence");
   } else await assertRecordKind(config, evidence.node, "HM Evidence", "source review page");
   const evidenceCurrent = await rpc(config, "logseq.Editor.getPage", [evidence.node.uuid, { includeChildren: false }]);
-  relationshipUpdates.push(await fillMissingSingleReference(config, evidenceCurrent, "hm-source-capture", capture.tree, "source-capture relationship"));
+  relationshipUpdates.push(await fillMissingSingleReference(
+    config,
+    evidenceCurrent,
+    "hm-source-capture",
+    capture.tree,
+    "source-capture relationship",
+    { allowTitleOnly: true },
+  ));
   relationshipUpdates.push(await appendReference(config, evidenceCurrent, "hm-proposed-record", durable.node, "proposed-record relationship"));
   for (const [key, value] of [
     ["hm-source-fingerprint", payload.sourceFingerprint],
@@ -1918,6 +2292,7 @@ async function materialize(config, inputPath) {
     propertyUpdates: propertyUpdates.map(({ key, outcome }) => ({ key, outcome })),
     generated,
     dashboard,
+    canonicalTitles,
   });
 }
 
@@ -2788,6 +3163,7 @@ function processingReadiness(ok, checks) {
     ok
     && checks.schema?.ready
     && checks.dashboard?.ready
+    && checks.canonicalTitles?.ready
     && checks.recordIntegrity?.ok
     && checks.privacy?.ok
     && checks.bridge?.ok
@@ -2804,6 +3180,7 @@ async function doctor() {
     logseq: null,
     schema: null,
     dashboard: null,
+    canonicalTitles: null,
     recordIntegrity: null,
     privacy: null,
     serialCoverage: null,
@@ -2818,6 +3195,7 @@ async function doctor() {
   }
   try { checks.schema = await schemaReadiness(config); } catch (error) { checks.schema = { ready: false, error: error.message }; }
   try { checks.dashboard = await dashboardStatus(config); } catch (error) { checks.dashboard = { ready: false, error: error.message }; }
+  try { checks.canonicalTitles = await canonicalRecordTitlePlan(config); } catch (error) { checks.canonicalTitles = { ok: false, ready: false, error: error.message, details: error.details }; }
   try { checks.recordIntegrity = await recordIntegrityAudit(config); } catch (error) { checks.recordIntegrity = { ok: false, error: error.message, details: error.details }; }
   try { checks.privacy = await privacyAudit(config); } catch (error) { checks.privacy = { ok: false, error: error.message, details: error.details }; }
   try { checks.serialCoverage = await serialCoverage(config); } catch (error) { checks.serialCoverage = { ok: false, error: error.message }; }
@@ -2847,13 +3225,25 @@ async function status() {
   try { schema = await schemaReadiness(config); } catch (error) { schema = { ready: false, error: error.message }; }
   let dashboard;
   try { dashboard = await dashboardStatus(config); } catch (error) { dashboard = { ready: false, error: error.message }; }
+  let canonicalTitles;
+  try { canonicalTitles = await canonicalRecordTitlePlan(config); } catch (error) { canonicalTitles = { ok: false, ready: false, error: error.message, details: error.details }; }
   let integrity;
   try { integrity = await recordIntegrityAudit(config); } catch (error) { integrity = { ok: false, error: error.message, details: error.details }; }
   let privacy;
   try { privacy = await privacyAudit(config); } catch (error) { privacy = { ok: false, error: error.message, details: error.details }; }
   let serials;
   try { serials = await serialCoverage(config); } catch (error) { serials = { ok: false, error: error.message }; }
-  output({ ok: true, config: publicConfig(config), schema, dashboard, recordIntegrity: integrity, privacy, serialCoverage: serials, bridge, stateGraph, handledCaptures: Object.keys(graphState.handled ?? {}).length, lastSuccessfulRunAt: graphState.lastSuccessfulRunAt ?? null });
+  output({ ok: true, config: publicConfig(config), schema, dashboard, canonicalTitles, recordIntegrity: integrity, privacy, serialCoverage: serials, bridge, stateGraph, handledCaptures: Object.keys(graphState.handled ?? {}).length, lastSuccessfulRunAt: graphState.lastSuccessfulRunAt ?? null });
+}
+
+async function canonicalizeTitles(args) {
+  if (args.confirm !== "add-canonical-record-markers") {
+    fail("Canonical title migration confirmation is required", {
+      next: "canonicalize-titles --confirm add-canonical-record-markers",
+      note: "This renames only Home OS durable record pages so each title starts with its canonical type marker. A graph export is saved first.",
+    });
+  }
+  output(await ensureCanonicalRecordTitles(loadConfig()));
 }
 
 function selfTest() {
@@ -2875,6 +3265,7 @@ function selfTest() {
   const readyChecks = {
     schema: { ready: true },
     dashboard: { ready: true },
+    canonicalTitles: { ready: true },
     recordIntegrity: { ok: true },
     privacy: { ok: true },
     bridge: { ok: true, busy: false, awaitingLogseqPlugin: false },
@@ -2885,6 +3276,59 @@ function selfTest() {
   }
   if (processingReadiness(true, { ...readyChecks, bridge: { ...readyChecks.bridge, awaitingLogseqPlugin: true } })) {
     fail("Processing readiness setup self-test failed");
+  }
+  if (processingReadiness(true, { ...readyChecks, canonicalTitles: { ready: false } })) {
+    fail("Processing readiness canonical-title self-test failed");
+  }
+
+  if (canonicalRecordTitle("Home · Kitchen · Microwave", "HM Item") !== "🟢 Home · Kitchen · Microwave") {
+    fail("Canonical title marker self-test failed");
+  }
+  if (canonicalRecordTitle("🟢 Home · Kitchen · Microwave", "HM Item") !== "🟢 Home · Kitchen · Microwave") {
+    fail("Canonical title idempotency self-test failed");
+  }
+  if (canonicalRecordTitle("🟢 Home · Kitchen", "HM Space") !== "📍 Home · Kitchen") {
+    fail("Canonical title type correction self-test failed");
+  }
+  const itemSearchTitle = canonicalItemSearchTitle({
+    title: "Home · Kitchen · KitchenAid KMHC319LSS00 Microwave",
+    manufacturer: "KitchenAid",
+    model: "KMHC319LSS00",
+    homeTitle: "🏠 Home",
+    spaceTitle: "📍 Home · Kitchen",
+  });
+  if (itemSearchTitle !== "🟢 Microwave — KitchenAid KMHC319LSS00 · Kitchen · Home") {
+    fail("Item-first canonical title self-test failed", { itemSearchTitle });
+  }
+  const slashModelSearchTitle = canonicalItemSearchTitle({
+    title: "Home · Kitchen · LG LFXS29766S Refrigerator",
+    manufacturer: "LG",
+    model: "LFXS29766S/00",
+    homeTitle: "🏠 Home",
+    spaceTitle: "📍 Home · Kitchen",
+  });
+  if (slashModelSearchTitle !== "🟢 Refrigerator — LG LFXS29766S∕00 · Kitchen · Home") {
+    fail("Item title namespace-safety self-test failed", { slashModelSearchTitle });
+  }
+  if (itemDashboardLabel(itemSearchTitle, "KitchenAid", "KMHC319LSS00") !== "KitchenAid Microwave · KMHC319LSS00") {
+    fail("Item-first dashboard label self-test failed", { itemSearchTitle });
+  }
+  if (materializationEvidenceLabel({
+    kind: "HM Item",
+    title: itemSearchTitle,
+    manufacturer: "KitchenAid",
+    model: "KMHC319LSS00",
+  }) !== "KitchenAid KMHC319LSS00 Microwave") {
+    fail("Backward-compatible evidence label self-test failed", { itemSearchTitle });
+  }
+  if (unmarkedRecordTitle("🟢 🟢 Home · Kitchen · Microwave") !== "Home · Kitchen · Microwave") {
+    fail("Canonical title cleanup self-test failed");
+  }
+  if (!equivalentRecordTitles("Home · Kitchen · Microwave", "🟢 Home · Kitchen · Microwave")) {
+    fail("Canonical title equivalence self-test failed");
+  }
+  if (shortDashboardLabel("🟢 Home · Kitchen · Microwave") !== "Microwave") {
+    fail("Canonical title dashboard-label self-test failed");
   }
 
   const original = { uuid: "capture", title: "Furnace", updatedAt: 1, children: [{ title: "Filter 16x25", id: 10 }] };
@@ -2999,6 +3443,21 @@ function selfTest() {
   if (!cyclicFindings.errors.some((error) => error.type === "parent-space-cycle")) {
     fail("Parent-space cycle self-test failed", cyclicFindings);
   }
+  const duplicateCanonicalTitleFindings = integrityFindingsForCatalog([
+    sampleHome,
+    sampleSpace,
+    sampleItem,
+    {
+      ...sampleItem,
+      id: 4,
+      uuid: "duplicate-fridge",
+      title: "🟢 Home · Kitchen · Refrigerator",
+      node: { ...sampleItem.node, id: 4, uuid: "duplicate-fridge", title: "🟢 Home · Kitchen · Refrigerator" },
+    },
+  ]);
+  if (!duplicateCanonicalTitleFindings.errors.some((error) => error.type === "duplicate-canonical-record-title")) {
+    fail("Duplicate canonical title self-test failed", duplicateCanonicalTitleFindings);
+  }
   const sanitizedReceipts = sanitizeCodexReceipts([
     {
       status: "processed",
@@ -3031,6 +3490,17 @@ function selfTest() {
       "processing-readiness",
       "processing-busy-blocked",
       "processing-setup-blocked",
+      "processing-canonical-title-blocked",
+      "canonical-title-marker",
+      "canonical-title-idempotent",
+      "canonical-title-type-correction",
+      "canonical-title-item-first",
+      "canonical-title-item-namespace-safe",
+      "canonical-title-item-first-dashboard-label",
+      "canonical-title-evidence-backward-compatible",
+      "canonical-title-cleanup",
+      "canonical-title-equivalence",
+      "canonical-title-dashboard-label",
       "semantic-metadata",
       "semantic-content",
       "serial-captured",
@@ -3046,6 +3516,7 @@ function selfTest() {
       "page-index-room-grouping",
       "multiple-durable-kinds-rejected",
       "parent-space-cycle-detected",
+      "duplicate-canonical-title-detected",
       "codex-receipt-sanitized",
     ],
   });
@@ -3173,6 +3644,7 @@ async function serve() {
         completeRun({ outcome: "setup_required", handledCount: 0, message: "Home OS setup is required." });
         return;
       }
+      await ensureCanonicalRecordTitles(config);
       const isManual = reason === "manual";
       if (!isManual && !config.autoRun) {
         await audit({ type: "queued", runId, captures: changed.map((capture) => capture.uuid), reason });
@@ -3524,6 +3996,8 @@ async function main() {
   if (command === "schema-complete") return output(await completeSchemaReceipt(loadConfig(), args.receipt));
   if (command === "dashboard") return output(await ensureDashboard(loadConfig()));
   if (command === "dashboard-repair") return output(await repairDashboardDuplicates(loadConfig(), args.confirm));
+  if (command === "canonical-title-audit") return output(await canonicalRecordTitlePlan(loadConfig()));
+  if (command === "canonicalize-titles") return canonicalizeTitles(args);
   if (command === "serial-audit") return output(await serialCoverage(loadConfig()));
   if (command === "record-audit") return output(await recordIntegrityAudit(loadConfig()));
   if (command === "privacy-audit") return output(await privacyAudit(loadConfig()));
@@ -3558,6 +4032,8 @@ async function main() {
       "schema-complete --receipt <absolute-schema-receipt-path>",
       "dashboard",
       "dashboard-repair --confirm remove-duplicate-generated-dashboard-nodes",
+      "canonical-title-audit",
+      "canonicalize-titles --confirm add-canonical-record-markers",
       "serial-audit",
       "record-audit",
       "privacy-audit",

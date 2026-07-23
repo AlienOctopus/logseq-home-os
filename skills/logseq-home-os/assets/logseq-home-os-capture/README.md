@@ -32,6 +32,12 @@ organizes real homes, rooms and areas, appliances and equipment, home systems,
 manuals and records, and source reviews. Its links open Logseq's live records
 and tag tables.
 
+The canonical appliance or equipment title starts with `🟢`. When global
+search shows captures, notes, citations, a containing room, and the item
+together, open the green result. `🏠`, `📍`, `⚙️`, and `📄` distinguish Home,
+Space, System, and Document records. These are fixed record-type markers, not
+changing statuses. Dashboard and room-page aliases omit them to stay readable.
+
 Home and room pages also receive a small generated index in their main body, so
 appliances and equipment are visible before Logseq's linked-reference history.
 System, item, and document indexes appear only when a real relationship exists.

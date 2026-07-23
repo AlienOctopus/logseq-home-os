@@ -24,6 +24,18 @@ Preserve these invariants:
   `#HM Generated`.
 - Never take over an existing human page or block because its title collides
   with a proposed Home OS record.
+- Every durable Home OS record page has exactly one leading type marker:
+  `🏠` Home, `📍` Space, `⚙️` System, `🟢` Item, and `📄` Document. These are
+  a user-facing search contract, not status decoration. In particular, `🟢`
+  must identify the one canonical appliance/equipment result even when a
+  matching room page also appears. Compare any marked and legacy unmarked
+  titles as the same proposed identity during preflight, and never create both.
+- Put the Item's ordinary object noun immediately after `🟢`, then identity and
+  location: `🟢 Microwave — KitchenAid KMHC319LSS00 · Kitchen · My home`.
+  Search optimization is part of the naming contract; do not put the home
+  hierarchy before the object noun on an Item page. Preserve exact model text
+  in `hm-model`; in the page title only, normalize `/` to `∕` so a model suffix
+  cannot create Logseq namespace behavior.
 - Materialization must preflight all ownership and one-to-one relationship
   conflicts before the first write.
 - Serial number is a first-class Item field whenever legible. Store its value
@@ -108,6 +120,7 @@ export. After scratch validation, restore the production configuration and run:
 ```bash
 node skills/logseq-home-os/scripts/home-os.mjs doctor
 node skills/logseq-home-os/scripts/home-os.mjs schema-verify
+node skills/logseq-home-os/scripts/home-os.mjs canonical-title-audit
 node skills/logseq-home-os/scripts/home-os.mjs scan --changed-only --json
 node skills/logseq-home-os/scripts/home-os.mjs record-audit
 node skills/logseq-home-os/scripts/home-os.mjs privacy-audit
@@ -116,14 +129,18 @@ node skills/logseq-home-os/scripts/home-os.mjs serial-audit
 
 Any user-visible change requires a rendered Logseq check after a cold restart.
 Verify the connected-H action, dashboard, representative room and item pages,
-completion feedback, and browser console/page errors. Structural API checks
-alone are insufficient.
+global search for a representative item, completion feedback, and browser
+console/page errors. Search must expose exactly one canonical Item record whose
+visible title starts with `🟢`, even if a matching `📍` room is also returned.
+Structural API checks alone are insufficient.
 
 ## Packaging and release
 
 - Update the Logseq package version and `HOME_OS_GENERATOR_VERSION` together
-  for product releases. Change `HOME_OS_SCHEMA_VERSION` only for a real schema
-  migration with backward-compatible detection and recovery.
+  for product releases. Update both `?v=` cache keys in the Logseq plugin's
+  `index.html` at the same time; a stale key can make Logseq execute the prior
+  bundle after reinstall. Change `HOME_OS_SCHEMA_VERSION` only for a real
+  schema migration with backward-compatible detection and recovery.
 - After any Codex plugin source change, run the plugin-creator cachebuster,
   validate the plugin and skill, then reinstall the resulting local Codex
   package.

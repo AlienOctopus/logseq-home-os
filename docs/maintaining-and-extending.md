@@ -287,6 +287,32 @@ Agent-owned main-body navigation must:
 - converge stale generated children deterministically;
 - never expose a serial number.
 
+Canonical durable titles must:
+
+- start with exactly one type marker: `🏠` Home, `📍` Space, `⚙️` System,
+  `🟢` Item, or `📄` Document;
+- treat marked and legacy unmarked forms as one logical identity in every
+  preflight and materialization lookup;
+- preserve page UUIDs and typed relationships during migration;
+- stop before mutation if the marked target is occupied;
+- save an official graph export before the first rename;
+- keep generated dashboard and relationship aliases marker-free.
+
+Item titles are search-first rather than folder-first:
+`🟢 <object noun> — <manufacturer model> · <room> · <home>`. This makes the
+human term appear at the start of a title match while typed `hm-home` and
+`hm-location` properties remain the real hierarchy. Do not infer hierarchy
+from the title. Preserve the exact model in `hm-model`. Normalize `/` to `∕`
+in the visible page title only, because an ASCII slash can trigger Logseq
+namespace behavior; dashboard labels may continue to display the exact model.
+
+Rendered QA must search for a representative appliance term and confirm that
+every visible result whose breadcrumb/title starts with `🟢` resolves inside
+the same canonical Item page. A containing `📍` room may also match because its
+generated index mentions the appliance; captures, evidence, citations, and
+narrative may match too. The exact Item page result should rank ahead of
+non-title matches when Logseq's current search ordering permits it.
+
 ## 9. Bridge, Codex, and receipt changes
 
 The bridge must:
@@ -330,22 +356,23 @@ For a product release:
 
 1. Update `skills/logseq-home-os/assets/logseq-home-os-capture/package.json`.
 2. Update `HOME_OS_GENERATOR_VERSION` in `home-os.mjs`.
-3. Set the matching base product version in
+3. Update both `?v=` script cache keys in the Logseq plugin `index.html`.
+4. Set the matching base product version in
    `.codex-plugin/plugin.json`; the cachebuster suffix is added later.
-4. Update user-facing release notes and the release-gate report.
-5. Rebuild both generated artifacts.
-6. Run every validation layer.
-7. Run the plugin-creator cachebuster for `.codex-plugin/plugin.json`.
-8. Validate the Codex plugin and skill and reinstall the local package.
-9. Build the Logseq archive using the same file list as
+5. Update user-facing release notes and the release-gate report.
+6. Rebuild both generated artifacts.
+7. Run every validation layer.
+8. Run the plugin-creator cachebuster for `.codex-plugin/plugin.json`.
+9. Validate the Codex plugin and skill and reinstall the local package.
+10. Build the Logseq archive using the same file list as
    `.github/workflows/publish.yml`.
-10. Test the archive, compare each entry with source, calculate SHA-256, and
+11. Test the archive, compare each entry with source, calculate SHA-256, and
    secret-scan its text entries.
-11. Commit and push a clean tree.
-12. Tag the release and wait for the GitHub Actions build.
-13. Download the public release asset, test the zip, inspect its package
+12. Commit and push a clean tree.
+13. Tag the release and wait for the GitHub Actions build.
+14. Download the public release asset, test the zip, inspect its package
     version, and repeat the secret scan.
-14. Render the public GitHub README and confirm all documentation images load.
+15. Render the public GitHub README and confirm all documentation images load.
 
 Keep GitHub Actions majors current and run `workflow_dispatch` on `main` after
 workflow changes. A tag build must attach a real plugin zip in addition to
