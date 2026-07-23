@@ -1,0 +1,225 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --home-os-bg: var(--ls-primary-background-color, #fbfcf9);
+        --home-os-surface: var(--ls-secondary-background-color, #eff3ed);
+        --home-os-text: var(--ls-primary-text-color, #20231f);
+        --home-os-muted: var(--ls-secondary-text-color, #5f6962);
+        --home-os-accent: var(--ls-link-text-color, #2f6040);
+        --home-os-border: var(--ls-border-color, rgba(43, 57, 47, 0.14));
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body { width: 100%; height: 100%; margin: 0; background: transparent; }
+
+      body {
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        color: var(--home-os-text);
+      }
+
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: rgba(19, 24, 20, 0.38);
+        backdrop-filter: blur(5px);
+      }
+
+      .card {
+        width: min(500px, 100%);
+        max-height: min(680px, calc(100vh - 32px));
+        overflow: auto;
+        border: 1px solid var(--home-os-border);
+        border-radius: 20px;
+        background: var(--home-os-bg);
+        box-shadow: 0 24px 70px rgba(16, 24, 18, 0.22);
+      }
+
+      .card-header { padding: 26px 28px 18px; }
+
+      .eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 16px;
+        color: var(--home-os-accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow svg { width: 18px; height: 18px; }
+
+      h1 {
+        margin: 0;
+        color: var(--home-os-text);
+        font-size: 26px;
+        line-height: 1.17;
+        letter-spacing: -0.025em;
+      }
+
+      .lede {
+        margin: 12px 0 0;
+        color: var(--home-os-muted);
+        font-size: 15px;
+        line-height: 1.55;
+      }
+
+      .assurances {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin: 0 28px 20px;
+      }
+
+      .assurance {
+        min-width: 0;
+        padding: 12px;
+        border-radius: 12px;
+        background: var(--home-os-surface);
+      }
+
+      .assurance strong { display: block; color: var(--home-os-text); font-size: 13px; }
+      .assurance span { display: block; margin-top: 3px; color: var(--home-os-muted); font-size: 11px; line-height: 1.35; }
+
+      .status {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        margin: 0 28px 20px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #eef3f8;
+        color: #32495c;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .status.visible { display: flex; }
+      .status.error { background: #faeeee; color: #7a3434; }
+      .status.success { background: #eaf4ec; color: #315f3d; }
+
+      .spinner {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 auto;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      details {
+        margin: 0 28px 22px;
+        color: var(--home-os-muted);
+        font-size: 12px;
+      }
+
+      summary { cursor: pointer; font-weight: 650; }
+      details p { margin: 9px 0 0; line-height: 1.5; }
+
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 18px 28px 24px;
+        border-top: 1px solid rgba(43, 57, 47, 0.1);
+      }
+
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 11px;
+        padding: 10px 15px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled { cursor: wait; opacity: 0.62; }
+      .secondary { background: transparent; color: var(--home-os-muted); }
+      .primary { background: var(--home-os-accent); color: white; box-shadow: 0 7px 18px rgba(47, 96, 64, 0.22); }
+
+      @media (prefers-color-scheme: dark) {
+        body { color: #e5ebe5; }
+        .backdrop { background: rgba(3, 7, 4, 0.56); }
+        .card { border-color: rgba(220, 235, 224, 0.12); background: #1c211d; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48); }
+        h1 { color: #f2f6f2; }
+        .eyebrow { color: #97b79f; }
+        .lede, details { color: #aeb8b0; }
+        .assurance { background: #272f29; }
+        .assurance strong { color: #e1e8e2; }
+        .assurance span { color: #9da89f; }
+        .actions { border-top-color: rgba(220, 235, 224, 0.1); }
+        .secondary { color: #b9c3bb; }
+        .primary { background: #5b946c; color: #0d1a11; }
+        .status { background: #26333d; color: #b8d0e2; }
+        .status.error { background: #3d2929; color: #efb7b7; }
+        .status.success { background: #25392a; color: #b5dabb; }
+      }
+
+      @media (max-width: 520px) {
+        body, .backdrop { padding: 12px; }
+        .card-header { padding: 22px 20px 16px; }
+        .assurances { grid-template-columns: 1fr; margin: 0 20px 18px; }
+        .status, details { margin-right: 20px; margin-left: 20px; }
+        .actions { padding: 16px 20px 20px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="backdrop" role="dialog" aria-modal="true" aria-labelledby="home-os-title">
+      <section class="card">
+        <div class="card-header">
+          <div class="eyebrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 7v10M18 7v10M8 12h8" />
+              <circle cx="6" cy="5" r="2" fill="currentColor" stroke="none" />
+              <circle cx="6" cy="19" r="2" fill="currentColor" stroke="none" />
+              <circle cx="18" cy="5" r="2" fill="currentColor" stroke="none" />
+              <circle cx="18" cy="19" r="2" fill="currentColor" stroke="none" />
+            </svg>
+            Home OS
+          </div>
+          <h1 id="home-os-title">Make this graph ready for Home OS</h1>
+          <p class="lede" id="home-os-lede">Home OS will back up this graph, add its organizing fields, and then open your dashboard.</p>
+        </div>
+
+        <div class="assurances" aria-label="Setup safeguards">
+          <div class="assurance"><strong>Backup first</strong><span>Saves an official Logseq export before setup.</span></div>
+          <div class="assurance"><strong>Keeps your notes</strong><span>Leaves captures and existing content in place.</span></div>
+          <div class="assurance"><strong>Checks its work</strong><span>Verifies the structure before processing anything.</span></div>
+        </div>
+
+        <div class="status" id="home-os-status" role="status" aria-live="polite"></div>
+
+        <details>
+          <summary>What does Home OS add?</summary>
+          <p id="home-os-details">Fields for homes, rooms, equipment, manufacturer, model, serial number, warranty, manuals, photos, and source review.</p>
+        </details>
+
+        <div class="actions">
+          <button class="secondary" id="home-os-cancel" type="button">Not now</button>
+          <button class="primary" id="home-os-setup" type="button">Set up Home OS</button>
+        </div>
+      </section>
+    </main>
+    <script src="./runtime-config.js?v=0.6.0"></script>
+    <script src="./index.js?v=0.6.0"></script>
+  </body>
+</html>

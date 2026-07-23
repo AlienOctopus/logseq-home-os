@@ -1,0 +1,20 @@
+{
+  "name": "zero-shot-or-die",
+  "interface": {
+    "displayName": "ZeroShot or Die"
+  },
+  "plugins": [
+    {
+      "name": "home-os",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@zeroshotordie/logseq-home-os-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild scripts/schema-transit-source.mjs --bundle --platform=node --format=esm --target=node20 --outfile=scripts/schema-transit.mjs",
+    "check": "node --check scripts/home-os.mjs && node --check scripts/schema-transit.mjs"
+  },
+  "dependencies": {
+    "transit-js": "^0.8.874"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Logseq Home OS"
+  short_description: "Capture and enrich a home in Logseq DB"
+  default_prompt: "Use $logseq-home-os to set up or process my Logseq Home OS."

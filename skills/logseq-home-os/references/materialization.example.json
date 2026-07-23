@@ -1,0 +1,44 @@
+{
+  "captureUuid": "replace-with-scan-uuid",
+  "sourceFingerprint": "replace-with-exact-64-character-scan-fingerprint",
+  "evidence": {
+    "status": "Needs review",
+    "kind": "Mixed",
+    "confidence": "Medium",
+    "summary": [
+      "What the evidence supports, without guessing."
+    ],
+    "observations": [
+      "Visible model-label text or a user-provided symptom."
+    ],
+    "uncertainties": [
+      "Anything the owner should confirm."
+    ],
+    "sources": [
+      {
+        "label": "Official manufacturer support page",
+        "url": "https://example.com/official-source"
+      }
+    ]
+  },
+  "record": {
+    "kind": "HM Item",
+    "title": "My home · Space · Item",
+    "homeTitle": "My home",
+    "spaceTitle": "My home · Space",
+    "category": "Appliance",
+    "manufacturer": "Manufacturer when supported",
+    "model": "Exact model when supported",
+    "serial": null,
+    "serialDisposition": "not-visible",
+    "lifecycle": "Active",
+    "verification": "Needs review",
+    "officialManualUrl": null,
+    "productUrl": null,
+    "primaryPhotoUuid": null,
+    "nameplatePhotoUuid": null,
+    "generated": [
+      "Owner-safe, sourced information for this item."
+    ]
+  }
+}

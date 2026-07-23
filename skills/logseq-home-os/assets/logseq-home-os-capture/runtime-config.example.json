@@ -1,0 +1,5 @@
+{
+  "bridgeUrl": "http://127.0.0.1:32145",
+  "bridgeSecret": "generated during installation",
+  "debounceMs": 8000
+}

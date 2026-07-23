@@ -1,0 +1,44 @@
+name: Build Logseq release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: skills/logseq-home-os/assets/logseq-home-os-capture/package-lock.json
+      - name: Install and build
+        working-directory: skills/logseq-home-os/assets/logseq-home-os-capture
+        run: |
+          npm ci
+          npm run build
+      - name: Assemble marketplace archive
+        run: |
+          mkdir -p dist/logseq-home-os-capture
+          cp skills/logseq-home-os/assets/logseq-home-os-capture/{README.md,index.html,index.js,package.json,runtime-config.example.json,runtime-config.js,icon.svg} dist/logseq-home-os-capture/
+          cp -R skills/logseq-home-os/assets/logseq-home-os-capture/docs dist/logseq-home-os-capture/docs
+          cd dist
+          zip -r logseq-home-os-capture.zip logseq-home-os-capture
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: logseq-home-os-capture
+          path: dist/logseq-home-os-capture.zip
+      - name: Attach archive to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/logseq-home-os-capture.zip
+          generate_release_notes: true

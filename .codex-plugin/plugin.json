@@ -1,0 +1,36 @@
+{
+  "name": "home-os",
+  "version": "0.6.0+codex.20260723074033",
+  "description": "Turn a simple Logseq journal capture into a private, readable home manual.",
+  "author": {
+    "name": "ZeroShot or Die"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/AlienOctopus/logseq-home-os#readme",
+  "repository": "https://github.com/AlienOctopus/logseq-home-os",
+  "keywords": [
+    "logseq",
+    "home",
+    "capture",
+    "maintenance",
+    "local-first"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Logseq Home OS",
+    "shortDescription": "Build a readable home manual from journal captures.",
+    "longDescription": "Turns a nested #HomeCapture block into human-labeled home, room, appliance, system, manual, and source-review records while preserving every original photo and note.",
+    "developerName": "ZeroShot or Die",
+    "category": "Productivity",
+    "capabilities": [
+      "Local",
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Set up my Logseq Home OS.",
+      "Process my new #HomeCapture blocks.",
+      "Check whether Home OS is healthy."
+    ]
+  }
+}

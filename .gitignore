@@ -1,0 +1,16 @@
+.DS_Store
+node_modules/
+dist/
+*.log
+*.zip
+.env
+.env.*
+
+# Keep local UX-test captures out of the public repository. Only the reviewed
+# documentation images below are intentionally publishable.
+docs/media/*
+!docs/media/home-os-first-run-clean.png
+!docs/media/home-os-dashboard-ux-after.png
+!docs/media/home-os-space-after-v050.png
+!docs/media/home-os-record-ux-after-public.png
+!docs/media/home-os-v060-production-final.png

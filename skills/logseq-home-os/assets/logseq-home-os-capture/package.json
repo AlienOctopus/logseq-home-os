@@ -1,0 +1,35 @@
+{
+  "name": "logseq-home-os-capture",
+  "version": "0.6.0",
+  "description": "Event-driven #HomeCapture notifier for Logseq Home OS",
+  "main": "index.html",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --format=iife --target=es2022 --outfile=index.js"
+  },
+  "dependencies": {
+    "@logseq/libs": "0.3.4"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.8"
+  },
+  "overrides": {
+    "dompurify": "3.4.12",
+    "lodash-es": "4.18.1"
+  },
+  "license": "MIT",
+  "logseq": {
+    "id": "zeroshotordie-home-os-capture",
+    "title": "Home OS Capture"
+  },
+  "title": "Home OS Capture",
+  "author": "ZeroShot or Die",
+  "homepage": "https://github.com/AlienOctopus/logseq-home-os#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AlienOctopus/logseq-home-os.git"
+  },
+  "icon": "icon.svg",
+  "effect": false,
+  "supportsDB": true,
+  "supportsDBOnly": true
+}
