@@ -12,4 +12,3 @@ When these files conflict with a direct user instruction, follow the user while
 preserving the immutable-capture, official-Logseq-API, privacy, backup, and
 graph-identity safety boundaries unless the user explicitly changes those
 product guarantees.
-

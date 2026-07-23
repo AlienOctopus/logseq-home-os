@@ -136,4 +136,3 @@ alone are insufficient.
 
 See `docs/maintaining-and-extending.md` for the full change and release
 playbook.
-
