@@ -24,18 +24,20 @@ Preserve these invariants:
   `#HM Generated`.
 - Never take over an existing human page or block because its title collides
   with a proposed Home OS record.
-- Every durable Home OS record page has exactly one leading type marker:
-  `🏠` Home, `📍` Space, `⚙️` System, `🟢` Item, and `📄` Document. These are
-  a user-facing search contract, not status decoration. In particular, `🟢`
-  must identify the one canonical appliance/equipment result even when a
-  matching room page also appears. Compare any marked and legacy unmarked
-  titles as the same proposed identity during preflight, and never create both.
-- Put the Item's ordinary object noun immediately after `🟢`, then identity and
-  location: `🟢 Microwave — KitchenAid KMHC319LSS00 · Kitchen · My home`.
-  Search optimization is part of the naming contract; do not put the home
-  hierarchy before the object noun on an Item page. Preserve exact model text
-  in `hm-model`; in the page title only, normalize `/` to `∕` so a model suffix
-  cannot create Logseq namespace behavior.
+- Durable record titles are clean human titles. Type is authoritative only
+  through the native `HM Home`, `HM Space`, `HM System`, `HM Item`, and
+  `HM Document` tags; never encode type with a title emoji. Treat the legacy
+  `🏠`, `📍`, `⚙️`, `🟢`, and `📄` forms and the clean form as the same proposed
+  identity during preflight, and never create both.
+- Put the Item's ordinary object noun first, then identity and location:
+  `Microwave — KitchenAid KMHC319LSS00 · Kitchen · My home`. Do not put the home
+  hierarchy before the object noun. Preserve exact model text in `hm-model`;
+  in the page title only, normalize `/` to `∕` so a model suffix cannot create
+  Logseq namespace behavior.
+- **Find in Home OS** is the sole supported record-search experience. It must
+  query only the five durable native tags, deduplicate by node UUID, show type
+  as UI metadata, and open the selected canonical record directly. Never teach
+  users to distinguish Home OS records in Logseq's graph-wide search.
 - Materialization must preflight all ownership and one-to-one relationship
   conflicts before the first write.
 - Serial number is a first-class Item field whenever legible. Store its value
@@ -61,8 +63,10 @@ Preserve these invariants:
   native Logseq plugin source.
 - `skills/logseq-home-os/assets/logseq-home-os-capture/index.js` — generated
   plugin bundle; rebuild it, do not hand-edit it.
-- `skills/logseq-home-os/assets/logseq-home-os-capture/index.html` — first-run
-  and plugin UI surface.
+- `skills/logseq-home-os/assets/logseq-home-os-capture/index.html` — Finder,
+  first-run, and plugin UI surface.
+- `skills/logseq-home-os/assets/logseq-home-os-capture/src/finder.mjs` — pure
+  Finder title parsing, filtering, ranking, and legacy-marker compatibility.
 - `skills/logseq-home-os/SKILL.md` — runtime behavior contract for Codex.
 - `skills/logseq-home-os/references/` — architecture, schema, and payload
   contracts.
@@ -129,10 +133,11 @@ node skills/logseq-home-os/scripts/home-os.mjs serial-audit
 
 Any user-visible change requires a rendered Logseq check after a cold restart.
 Verify the connected-H action, dashboard, representative room and item pages,
-global search for a representative item, completion feedback, and browser
-console/page errors. Search must expose exactly one canonical Item record whose
-visible title starts with `🟢`, even if a matching `📍` room is also returned.
-Structural API checks alone are insufficient.
+Finder results for representative item, room, model, and no-match queries,
+keyboard navigation, direct record opening, completion feedback, and
+console/page errors. An Item query must expose exactly one canonical Item row;
+captures, evidence, citations, and generated relationship mentions must never
+enter the Finder. Structural API checks alone are insufficient.
 
 ## Packaging and release
 

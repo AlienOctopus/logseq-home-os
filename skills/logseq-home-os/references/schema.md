@@ -94,41 +94,37 @@ The processor must inspect every supplied nameplate or identifier photo at origi
 
 The generated subtree begins with an exact nested capture example and groups navigation into `Your home`, `Rooms & areas`, `Appliances & equipment`, `Home systems`, `Manuals & records`, and `Inbox & review`. Every type heading links to its native Logseq tag page, whose built-in views remain the live table of record. Durable links use a short final-segment label while preserving their exact page target. The dashboard may list only real durable pages returned by each tag; it must not pre-create imaginary rooms, appliances, systems, or documents.
 
-## Canonical record title and search rule
+## Canonical record title and Finder rule
 
-Every durable record page title begins with exactly one fixed type marker,
-followed by a space:
+Durable record pages use clean human titles:
 
-- `🏠 My home` — `HM Home`
-- `📍 My home · Basement` — `HM Space`
-- `⚙️ My home · HVAC` — `HM System`
-- `🟢 Refrigerator — Whirlpool WRS325SDHZ · Basement · My home`
-- `📄 My home · Basement · Refrigerator warranty` — `HM Document`
+- `My home` — `HM Home`
+- `My home · Basement` — `HM Space`
+- `My home · HVAC` — `HM System`
+- `Refrigerator — Whirlpool WRS325SDHZ · Basement · My home` — `HM Item`
+- `My home · Basement · Refrigerator warranty` — `HM Document`
 
-The markers have one stable meaning: the page is a canonical durable record of
-that type. They are not lifecycle, verification, or online/offline statuses.
-In global appliance search, users ignore every other match and open the one
-result whose visible title or breadcrumb starts with `🟢`. Logseq can surface
-both the Item page and a matching child on that page; both green hits resolve
-inside the same canonical Item. A containing room may match because its
-generated index names the item, but that result starts with `📍`. Generated
-dashboard and relationship-index aliases strip markers and show only compact
-human labels.
+The native tag is the record type. Type is never encoded as title decoration.
+**Find in Home OS** queries only the five durable tags, deduplicates nodes by
+UUID, renders type as an icon and badge, and opens the chosen canonical record
+directly. Logseq's graph-wide search is not a supported Home OS retrieval
+surface because it correctly includes captures, evidence, generated indexes,
+citations, and incidental mentions.
 
-Item titles are deliberately search-first:
-`🟢 <ordinary object noun> — <manufacturer model> · <space> · <home>`. The
-ordinary term appears immediately after the marker so direct title matching
-ranks well. This is presentation, not hierarchy. `hm-home`, `hm-location`, and
-the other typed relationships remain authoritative. Exact identifier text
-belongs in `hm-model`; the visible title replaces ASCII `/` with `∕` so a model
-suffix cannot be interpreted as a Logseq namespace.
+Item titles are object-first:
+`<ordinary object noun> — <manufacturer model> · <space> · <home>`. The
+ordinary term remains the primary Finder label. This is presentation, not
+hierarchy. `hm-home`, `hm-location`, and the other typed relationships remain
+authoritative. Exact identifier text belongs in `hm-model`; the visible title
+replaces ASCII `/` with `∕` so a model suffix cannot be interpreted as a
+Logseq namespace.
 
-The helper treats every marker variant and the legacy unmarked form as one
-proposed identity during ownership preflight. Before materialization or
-dashboard refresh, it plans an owned-page-only migration, stops on any target
-collision, saves an official graph export, renames by page UUID through the
-supported Logseq API, and verifies that every UUID is unchanged. A human page
-at the target title is never taken over.
+The helper treats each legacy marker variant (`🏠`, `📍`, `⚙️`, `🟢`, `📄`)
+and the clean form as one proposed identity during ownership preflight. Before
+materialization or dashboard refresh, it plans an owned-page-only migration,
+stops on any target collision, saves an official graph export, renames by page
+UUID through the supported Logseq API, and verifies that every UUID is
+unchanged. A human page at the clean target title is never taken over.
 
 Logseq DB releases may return either title-backed or UUID-backed page-reference text through the API. Dashboard idempotency therefore compares both exact human-authored aliases and their canonical UUID variants.
 

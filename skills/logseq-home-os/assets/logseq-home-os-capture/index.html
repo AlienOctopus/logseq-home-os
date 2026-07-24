@@ -16,6 +16,7 @@
       }
 
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
 
       html, body { width: 100%; height: 100%; margin: 0; background: transparent; }
 
@@ -45,6 +46,211 @@
         background: var(--home-os-bg);
         box-shadow: 0 24px 70px rgba(16, 24, 18, 0.22);
       }
+
+      .finder {
+        width: min(680px, 100%);
+        max-height: min(760px, calc(100vh - 32px));
+        overflow: hidden;
+        border: 1px solid var(--home-os-border);
+        border-radius: 18px;
+        background: var(--home-os-bg);
+        box-shadow: 0 28px 90px rgba(16, 24, 18, 0.26);
+      }
+
+      .finder-header {
+        position: relative;
+        padding: 24px 26px 18px;
+        border-bottom: 1px solid var(--home-os-border);
+      }
+
+      .finder-header h1 { padding-right: 44px; }
+
+      .finder-close {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        padding: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--home-os-muted);
+      }
+
+      .finder-close:hover { background: var(--home-os-surface); color: var(--home-os-text); }
+      .finder-close svg { width: 17px; height: 17px; }
+
+      .finder-search {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 20px;
+        padding: 0 12px;
+        border: 1px solid var(--home-os-border);
+        border-radius: 12px;
+        background: var(--home-os-surface);
+        transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+      }
+
+      .finder-search:focus-within {
+        border-color: color-mix(in srgb, var(--home-os-accent) 62%, transparent);
+        background: var(--home-os-bg);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--home-os-accent) 14%, transparent);
+      }
+
+      .finder-search > svg {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        color: var(--home-os-muted);
+      }
+
+      .finder-search input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        outline: 0;
+        padding: 13px 0;
+        background: transparent;
+        color: var(--home-os-text);
+        font: inherit;
+        font-size: 15px;
+      }
+
+      .finder-search input::placeholder { color: var(--home-os-muted); opacity: 0.8; }
+      .finder-search input::-webkit-search-cancel-button { display: none; }
+
+      .finder-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 39px;
+        padding: 10px 26px 8px;
+        color: var(--home-os-muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .finder-summary span:last-child {
+        font-weight: 550;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
+      .finder-results {
+        max-height: min(420px, calc(100vh - 315px));
+        overflow: auto;
+        padding: 0 14px 14px;
+      }
+
+      .finder-result {
+        display: grid;
+        width: 100%;
+        grid-template-columns: 40px minmax(0, 1fr) auto 16px;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        background: transparent;
+        color: var(--home-os-text);
+        text-align: left;
+        box-shadow: none;
+      }
+
+      .finder-result + .finder-result { margin-top: 3px; }
+      .finder-result:hover, .finder-result.active {
+        border-color: var(--home-os-border);
+        background: var(--home-os-surface);
+      }
+
+      .finder-result:focus-visible {
+        outline: 2px solid var(--home-os-accent);
+        outline-offset: 1px;
+      }
+
+      .finder-result-icon {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--home-os-accent) 20%, transparent);
+        border-radius: 11px;
+        background: color-mix(in srgb, var(--home-os-accent) 9%, transparent);
+        color: var(--home-os-accent);
+      }
+
+      .finder-result-icon svg { width: 20px; height: 20px; }
+      .finder-result-copy { min-width: 0; }
+      .finder-result-copy strong {
+        display: block;
+        overflow: hidden;
+        color: var(--home-os-text);
+        font-size: 14px;
+        line-height: 1.3;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .finder-result-copy span {
+        display: block;
+        overflow: hidden;
+        margin-top: 4px;
+        color: var(--home-os-muted);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .finder-kind {
+        padding: 4px 7px;
+        border: 1px solid var(--home-os-border);
+        border-radius: 999px;
+        color: var(--home-os-muted);
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .finder-chevron { width: 16px; height: 16px; color: var(--home-os-muted); opacity: 0.65; }
+
+      .finder-empty {
+        padding: 42px 24px 48px;
+        color: var(--home-os-muted);
+        text-align: center;
+      }
+
+      .finder-empty strong { display: block; color: var(--home-os-text); font-size: 14px; }
+      .finder-empty span { display: block; margin-top: 7px; font-size: 12px; line-height: 1.5; }
+
+      .finder-notice {
+        margin: 0 26px 12px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        background: #f8f1e5;
+        color: #6a4b1e;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .finder-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 26px 18px;
+        border-top: 1px solid var(--home-os-border);
+      }
+
+      .finder-footer-actions { display: flex; align-items: center; gap: 8px; }
+      .finder-footer .secondary:hover { background: var(--home-os-surface); }
+      .finder-footer-hint { color: var(--home-os-muted); font-size: 11px; }
 
       .card-header { padding: 26px 28px 18px; }
 
@@ -154,8 +360,17 @@
       button:disabled { cursor: wait; opacity: 0.62; }
       .secondary { background: transparent; color: var(--home-os-muted); }
       .primary { background: var(--home-os-accent); color: white; box-shadow: 0 7px 18px rgba(47, 96, 64, 0.22); }
+      button:focus-visible { outline: 2px solid var(--home-os-accent); outline-offset: 2px; }
 
       @media (prefers-color-scheme: dark) {
+        :root {
+          --home-os-bg: #1c211d;
+          --home-os-surface: #272f29;
+          --home-os-text: #f2f6f2;
+          --home-os-muted: #aeb8b0;
+          --home-os-accent: #97b79f;
+          --home-os-border: rgba(220, 235, 224, 0.12);
+        }
         body { color: #e5ebe5; }
         .backdrop { background: rgba(3, 7, 4, 0.56); }
         .card { border-color: rgba(220, 235, 224, 0.12); background: #1c211d; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48); }
@@ -171,10 +386,26 @@
         .status { background: #26333d; color: #b8d0e2; }
         .status.error { background: #3d2929; color: #efb7b7; }
         .status.success { background: #25392a; color: #b5dabb; }
+        .finder { border-color: rgba(220, 235, 224, 0.12); background: #1c211d; box-shadow: 0 28px 90px rgba(0, 0, 0, 0.52); }
+        .finder-search { background: #272f29; }
+        .finder-search:focus-within { background: #1c211d; }
+        .finder-result:hover, .finder-result.active { background: #272f29; }
+        .finder-result-icon { border-color: rgba(151, 183, 159, 0.18); background: rgba(91, 148, 108, 0.11); color: #97b79f; }
+        .finder-notice { background: #3b3325; color: #e4c996; }
       }
 
       @media (max-width: 520px) {
         body, .backdrop { padding: 12px; }
+        .finder-header { padding: 21px 18px 16px; }
+        .finder-header h1 { padding-right: 38px; font-size: 23px; }
+        .finder-close { top: 14px; right: 14px; }
+        .finder-summary { padding-right: 18px; padding-left: 18px; }
+        .finder-results { padding-right: 8px; padding-left: 8px; }
+        .finder-result { grid-template-columns: 38px minmax(0, 1fr) 14px; gap: 10px; padding: 10px; }
+        .finder-kind { display: none; }
+        .finder-footer { align-items: stretch; padding: 12px 18px 16px; }
+        .finder-footer-hint { display: none; }
+        .finder-footer-actions { width: 100%; justify-content: space-between; }
         .card-header { padding: 22px 20px 16px; }
         .assurances { grid-template-columns: 1fr; margin: 0 20px 18px; }
         .status, details { margin-right: 20px; margin-left: 20px; }
@@ -183,8 +414,56 @@
     </style>
   </head>
   <body>
-    <main class="backdrop" role="dialog" aria-modal="true" aria-labelledby="home-os-title">
-      <section class="card">
+    <main class="backdrop" id="home-os-main">
+      <section class="finder" id="home-os-finder" role="dialog" aria-modal="true" aria-labelledby="home-os-finder-title" hidden>
+        <header class="finder-header">
+          <button class="finder-close" id="home-os-finder-close" type="button" aria-label="Close Find in Home OS">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+          <div class="eyebrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 7v10M18 7v10M8 12h8" />
+              <circle cx="6" cy="5" r="2" fill="currentColor" stroke="none" />
+              <circle cx="6" cy="19" r="2" fill="currentColor" stroke="none" />
+              <circle cx="18" cy="5" r="2" fill="currentColor" stroke="none" />
+              <circle cx="18" cy="19" r="2" fill="currentColor" stroke="none" />
+            </svg>
+            Find in Home OS
+          </div>
+          <h1 id="home-os-finder-title">What are you looking for?</h1>
+          <p class="lede">Only canonical home records appear here. Captures, source reviews, and incidental mentions stay out.</p>
+          <label class="finder-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M16.5 16.5L21 21" />
+            </svg>
+            <input id="home-os-finder-query" type="search" role="combobox" aria-autocomplete="list" aria-controls="home-os-finder-results" aria-expanded="true" autocomplete="off" spellcheck="false" placeholder="Try microwave, kitchen, warranty…">
+          </label>
+        </header>
+
+        <div class="finder-summary" aria-live="polite">
+          <span id="home-os-finder-count">Home records</span>
+          <span>↑ ↓ to move · ↵ to open</span>
+        </div>
+        <div class="finder-notice" id="home-os-finder-notice" hidden></div>
+        <div class="finder-results" id="home-os-finder-results" role="listbox" aria-label="Home OS records"></div>
+        <div class="finder-empty" id="home-os-finder-empty" hidden>
+          <strong id="home-os-finder-empty-title">No matching home records</strong>
+          <span id="home-os-finder-empty-detail">Try an appliance, room, manufacturer, model, system, or document name.</span>
+        </div>
+
+        <footer class="finder-footer">
+          <span class="finder-footer-hint">Esc closes</span>
+          <div class="finder-footer-actions">
+            <button class="secondary" id="home-os-finder-process" type="button">Process new captures</button>
+            <button class="primary" id="home-os-finder-dashboard" type="button">Open dashboard</button>
+          </div>
+        </footer>
+      </section>
+
+      <section class="card" id="home-os-setup-dialog" role="dialog" aria-modal="true" aria-labelledby="home-os-title" hidden>
         <div class="card-header">
           <div class="eyebrow">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -219,7 +498,7 @@
         </div>
       </section>
     </main>
-    <script src="./runtime-config.js?v=0.7.0"></script>
-    <script src="./index.js?v=0.7.0"></script>
+    <script src="./runtime-config.js?v=0.8.0"></script>
+    <script src="./index.js?v=0.8.0"></script>
   </body>
 </html>

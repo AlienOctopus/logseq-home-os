@@ -1,10 +1,11 @@
 {
   "name": "logseq-home-os-capture",
-  "version": "0.7.0",
-  "description": "Event-driven #HomeCapture notifier for Logseq Home OS",
+  "version": "0.8.0",
+  "description": "Canonical Home OS record Finder and event-driven #HomeCapture notifier",
   "main": "index.html",
   "scripts": {
-    "build": "esbuild src/main.js --bundle --format=iife --target=es2022 --outfile=index.js"
+    "build": "esbuild src/main.js --bundle --format=iife --target=es2022 --outfile=index.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@logseq/libs": "0.3.4"

@@ -25,22 +25,22 @@ The same flow produced this real, linked appliance record from a three-child ref
 
 ![Structured refrigerator record in Logseq](docs/media/home-os-record-ux-after-public.png)
 
-Search is intentionally unambiguous: the canonical appliance or equipment
-record starts with `🟢`. Search for an ordinary word such as `microwave`, then
-open the green result. A room that mentions the microwave starts with `📍`;
-captures, evidence, notes, and citations have no canonical type marker.
+The connected-H action opens **Find in Home OS**, a purpose-built search that
+contains only canonical home records. Search `microwave` and one appliance
+record appears—not the capture, source review, room index, citations, or every
+note that happens to mention it.
 
-![Canonical Home OS record in Logseq search](docs/media/home-os-search-canonical-v0.7.0.png)
+![Find in Home OS](docs/media/home-os-finder-v0.8.0.png)
 
 ## What this repository contains
 
-- A DB-graph-only Logseq plugin with one connected-H Home OS action, a native dashboard, guided first-run setup, and explicit processing feedback.
+- A DB-graph-only Logseq plugin with one connected-H action, a canonical-only record Finder, a native dashboard, guided first-run setup, and explicit processing feedback.
 - A loopback-only, bearer-authenticated macOS bridge that semantically fingerprints changed captures before starting Codex.
 - A Codex plugin/skill that enforces the additive evidence-to-record workflow.
 - A narrow `materialize` contract that rejects stale fingerprints and unapproved schema values before writing.
 - A first-class, privacy-sensitive `hm-serial` field on each Item record, with mandatory nameplate inspection, explicit captured/unavailable dispositions, conflict protection, and a value-free coverage audit.
 - Relationship-driven main-body indexes for homes, rooms, systems, items, and documents; empty categories disappear and human-authored page content remains untouched.
-- A single search affordance: `🟢` always marks the canonical appliance or equipment record, while `🏠`, `📍`, `⚙️`, and `📄` distinguish the other durable record types.
+- A first-party Home OS Finder that searches only durable Home, Room/Area, Appliance/Equipment, System, and Manual/Record nodes, deduplicates by UUID, and opens the selected record directly.
 - Ownership and integrity gates that reject page collisions, multiple record kinds, parent-space cycles, home/location mismatches, unsafe URLs, and conflicting one-to-one relationships.
 - A privacy audit plus ephemeral Codex transcripts: only sanitized, deduplicated machine receipts persist; crash recovery removes orphan transcripts/processes and runs have a hard timeout.
 - Repeatable install, health, backup, verification, reinstall, and uninstall commands.
@@ -56,10 +56,10 @@ Install Logseq Home OS from https://github.com/AlienOctopus/logseq-home-os on th
 
 Use only Logseq's official desktop HTTP API and the repository's supported installers. Do not edit SQLite, WAL, db-worker, search, or sync files. Keep the currently open Logseq DB graph as the target. Clone or update the repository in a normal user-owned source directory, add its Codex marketplace, install the home-os Codex plugin, run the bundled Home OS bootstrap against the currently open graph, and verify that the loopback bridge and Logseq plugin are installed. Do not create sample rooms or appliances and do not alter existing graph content.
 
-When installation is healthy, tell me to click the Home OS dashboard action in Logseq. That first click must show the additive setup preview, create a backup, build and verify the graph structure, open the native Home OS dashboard, and automatically resume any waiting #HomeCapture. For every Item, inspect all nameplate photos at original resolution and always populate the private hm-serial field when the serial is legible; never place its value in logs, dashboard text, QR content, or public summaries. Keep working through safe, reversible diagnostics until the complete install is verified; do not stop for routine confirmations.
+When installation is healthy, tell me to click the connected-H Home OS action in Logseq. That first click must show the additive setup preview, create a backup, build and verify the graph structure, and automatically resume any waiting #HomeCapture. After setup, the action must open Find in Home OS. For every Item, inspect all nameplate photos at original resolution and always populate the private hm-serial field when the serial is legible; never place its value in logs, dashboard text, QR content, or public summaries. Keep working through safe, reversible diagnostics until the complete install is verified; do not stop for routine confirmations.
 ```
 
-The first dashboard click is the only setup surface the Logseq user needs. If the schema is missing or partially installed, the same action repairs it idempotently and resumes the original capture request. After setup, the connected-H glyph—four Logseq-like nodes forming an H—opens the `Home OS` page and checks the capture inbox. `Home OS: Process new captures` remains available in the command palette for power users who want to process without navigating.
+The first connected-H click is the only setup surface the Logseq user needs. If the schema is missing or partially installed, the same action repairs it idempotently and resumes the original capture request. After setup, the connected-H glyph—four Logseq-like nodes forming an H—opens **Find in Home OS** and checks the capture inbox. `Home OS: Open dashboard` and `Home OS: Process new captures` remain available in the command palette.
 
 Materialization is idempotent for an unchanged capture: a replay reuses the source review and durable record and does not add a second generated update.
 Volatile Logseq timestamps and UI metadata do not requeue a capture, and a multi-capture run advances handled state only for UUIDs that return their own accepted machine receipt.
@@ -76,7 +76,7 @@ codex plugin add home-os@zero-shot-or-die
 node skills/logseq-home-os/scripts/home-os.mjs bootstrap
 ```
 
-Then reload **Home OS Capture** from Logseq’s Plugins screen once during local development. Use the connected-H action or **Home OS: Open dashboard** to open the operating surface and check the inbox. Use **Home OS: Process new captures** from the command palette to process without changing pages.
+Then reload **Home OS Capture** from Logseq’s Plugins screen once during local development. Use the connected-H action—or **Home OS: Find a record** in the command palette—to open the canonical record Finder and check the inbox. Use **Home OS: Open dashboard** for the overview and **Home OS: Process new captures** to process without navigating.
 
 Health and verification:
 
@@ -120,7 +120,7 @@ The repository includes both distribution surfaces:
 The Logseq manifest declares `supportsDBOnly: true`. The plugin uses the current DB SDK and is not designed for legacy file graphs.
 
 The full adversarial acceptance matrix and final production invariants are in
-[the v0.7.0 release gate](docs/release-gate-v0.7.0.md).
+[the v0.8.0 release gate](docs/release-gate-v0.8.0.md).
 
 ## Maintaining and extending
 

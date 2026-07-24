@@ -289,29 +289,31 @@ Agent-owned main-body navigation must:
 
 Canonical durable titles must:
 
-- start with exactly one type marker: `🏠` Home, `📍` Space, `⚙️` System,
-  `🟢` Item, or `📄` Document;
-- treat marked and legacy unmarked forms as one logical identity in every
+- be clean human titles; native `HM` tags are the sole record-type authority;
+- treat legacy marked and clean forms as one logical identity in every
   preflight and materialization lookup;
 - preserve page UUIDs and typed relationships during migration;
-- stop before mutation if the marked target is occupied;
+- stop before mutation if the clean target is occupied;
 - save an official graph export before the first rename;
-- keep generated dashboard and relationship aliases marker-free.
+- keep generated dashboard and relationship aliases compact and human-readable.
 
-Item titles are search-first rather than folder-first:
-`🟢 <object noun> — <manufacturer model> · <room> · <home>`. This makes the
-human term appear at the start of a title match while typed `hm-home` and
+Item titles are object-first rather than folder-first:
+`<object noun> — <manufacturer model> · <room> · <home>`. Typed `hm-home` and
 `hm-location` properties remain the real hierarchy. Do not infer hierarchy
 from the title. Preserve the exact model in `hm-model`. Normalize `/` to `∕`
 in the visible page title only, because an ASCII slash can trigger Logseq
 namespace behavior; dashboard labels may continue to display the exact model.
 
-Rendered QA must search for a representative appliance term and confirm that
-every visible result whose breadcrumb/title starts with `🟢` resolves inside
-the same canonical Item page. A containing `📍` room may also match because its
-generated index mentions the appliance; captures, evidence, citations, and
-narrative may match too. The exact Item page result should rank ahead of
-non-title matches when Logseq's current search ordering permits it.
+The supported retrieval surface is **Find in Home OS**, opened from the
+connected-H action or the `Home OS: Find a record` command. Its pure
+filtering/ranking logic lives in
+`assets/logseq-home-os-capture/src/finder.mjs` with Node tests under `tests/`.
+Rendered QA must confirm that representative object, room, manufacturer, and
+model queries return only canonical durable rows, that an exact ordinary item
+name ranks first, that keyboard selection opens the intended record, and that
+captures, evidence, citations, and generated mentions are absent by
+construction. Native Logseq global search is deliberately outside this
+contract.
 
 ## 9. Bridge, Codex, and receipt changes
 

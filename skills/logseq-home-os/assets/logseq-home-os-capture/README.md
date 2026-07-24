@@ -1,10 +1,10 @@
 # Home OS Capture
 
 Home OS Capture connects low-friction Logseq journal captures to the local
-Home OS processing companion. It opens a native `Home OS` dashboard, watches
-for changes, queues a deterministic scan, and provides a manual command-palette
-trigger. It does not run an AI model or read Logseq's database
-files directly.
+Home OS processing companion. It provides a canonical-only record Finder,
+opens the native `Home OS` dashboard, watches for changes, queues a
+deterministic scan, and provides manual command-palette triggers. It does not
+run an AI model or read Logseq's database files directly.
 
 ## Capture something
 
@@ -23,20 +23,20 @@ or issue. Put every related photo and note underneath it:
 - Use a separate tagged parent for each separate object or issue.
 - Keep the original capture intact; Home OS adds structured records elsewhere.
 
-## Open Home OS
+## Find anything in Home OS
 
-Select the connected-H action or use **Home OS: Open dashboard** from
-Logseq's command palette. The dashboard action opens the native `Home OS` page and checks for waiting
-captures. The dashboard starts with a literal nested capture example, then
-organizes real homes, rooms and areas, appliances and equipment, home systems,
-manuals and records, and source reviews. Its links open Logseq's live records
-and tag tables.
+Select the connected-H action or choose **Home OS: Find a record** from the
+command palette. **Find in Home OS** contains
+only canonical home, room/area, appliance/equipment, system, and manual/record
+nodes. Search by ordinary name, room, manufacturer, or model and open the
+result directly. Captures, source reviews, citations, and incidental mentions
+never appear in this list.
 
-The canonical appliance or equipment title starts with `🟢`. When global
-search shows captures, notes, citations, a containing room, and the item
-together, open the green result. `🏠`, `📍`, `⚙️`, and `📄` distinguish Home,
-Space, System, and Document records. These are fixed record-type markers, not
-changing statuses. Dashboard and room-page aliases omit them to stay readable.
+Use **Home OS: Open dashboard** from Logseq's command palette—or the Finder's
+**Open dashboard** button—for the overview. The dashboard starts with a
+literal nested capture example, then organizes real homes, rooms and areas,
+appliances and equipment, home systems, manuals and records, and source
+reviews. Its links open Logseq's live records and tag tables.
 
 Home and room pages also receive a small generated index in their main body, so
 appliances and equipment are visible before Logseq's linked-reference history.
@@ -53,7 +53,7 @@ Home OS fingerprints the human content and structure of the entire tagged
 subtree and skips it when nothing meaningful has changed. Logseq-only
 timestamps and UI metadata do not requeue a capture.
 
-On a new graph, the dashboard action opens a one-time setup card. It previews what
+On a new graph, the connected-H action opens a one-time setup card. It previews what
 will be added, saves an official Logseq export, builds and verifies the graph
 structure, creates the dashboard, and then resumes the waiting capture
 automatically. There is no separate schema-install command for the user to

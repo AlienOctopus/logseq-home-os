@@ -46,7 +46,7 @@ own positively identified orphaned Codex process and remove any interrupted raw
 transcript before accepting new work. Runs are also bounded by a configurable
 timeout.
 
-On an uninitialized graph, the first dashboard action inserts a guided setup phase before the scan: preview the additive plan, save an official export, create the base schema, let the native plugin complete class inheritance, create the generated dashboard, verify, open the dashboard, and resume the original processing request automatically.
+On an uninitialized graph, the first connected-H action inserts a guided setup phase before the scan: preview the additive plan, save an official export, create the base schema, let the native plugin complete class inheritance, create the generated dashboard, verify, and resume the original processing request automatically. After setup, that action opens the canonical-only Home OS Finder; the dashboard remains a separate overview destination.
 
 Capture fingerprint algorithm `capture-v2` hashes the complete human-visible subtree after recursively discarding Logseq runtime metadata such as database IDs, timestamps, parent/page projections, collapsed state, and ordering fields. Titles, notes, properties, assets, tags, child content, and child order remain significant. During migration, the scanner also recognizes the previous whole-object hash so an already handled capture is not falsely requeued merely because the plugin upgraded.
 

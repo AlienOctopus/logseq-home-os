@@ -25,9 +25,9 @@ const LAUNCH_AGENT_PATH = path.join(os.homedir(), "Library", "LaunchAgents", `${
 const DEFAULT_API_URL = "http://127.0.0.1:12315/api";
 const DEFAULT_BRIDGE_PORT = 32145;
 const HOME_OS_SCHEMA_VERSION = "2";
-const HOME_OS_GENERATOR_VERSION = "home-os/0.7.0";
+const HOME_OS_GENERATOR_VERSION = "home-os/0.8.0";
 const HOME_OS_DURABLE_KINDS = new Set(["HM Home", "HM Space", "HM System", "HM Item", "HM Document"]);
-const HOME_OS_KIND_MARKERS = new Map([
+const HOME_OS_LEGACY_KIND_MARKERS = new Map([
   ["HM Home", "🏠"],
   ["HM Space", "📍"],
   ["HM System", "⚙️"],
@@ -800,7 +800,7 @@ function unmarkedRecordTitle(title) {
   let changed = true;
   while (changed) {
     changed = false;
-    for (const marker of HOME_OS_KIND_MARKERS.values()) {
+    for (const marker of HOME_OS_LEGACY_KIND_MARKERS.values()) {
       if (!unmarked.startsWith(marker)) continue;
       unmarked = unmarked.slice(marker.length).trimStart();
       changed = true;
@@ -810,16 +810,11 @@ function unmarkedRecordTitle(title) {
   return unmarked.trim();
 }
 
-function recordMarker(kind) {
-  const marker = HOME_OS_KIND_MARKERS.get(kind);
-  if (!marker) fail("Home OS durable record kind has no search marker", { kind });
-  return marker;
-}
-
 function canonicalRecordTitle(title, kind) {
+  if (!HOME_OS_DURABLE_KINDS.has(kind)) fail("Unknown Home OS durable record kind", { kind });
   const unmarked = unmarkedRecordTitle(title);
-  const marker = recordMarker(kind);
-  return unmarked ? `${marker} ${unmarked}` : marker;
+  if (kind === "HM Home" && unmarked.toLocaleLowerCase() === "home") return "My home";
+  return unmarked;
 }
 
 function equivalentRecordTitles(left, right) {
@@ -861,17 +856,27 @@ function itemTitleText(value) {
 
 function canonicalItemSearchTitle({ title, manufacturer, model, homeTitle, spaceTitle }) {
   const unmarked = unmarkedRecordTitle(title);
-  if (unmarked.includes(" — ")) return canonicalRecordTitle(itemTitleText(unmarked), "HM Item");
   const kind = itemTitleText(itemKindLabel(unmarked, manufacturer, model));
-  const identity = [manufacturer, model].filter(Boolean).map(itemTitleText).join(" ").trim();
+  const existingIdentity = unmarked.includes(" — ")
+    ? unmarked.split(/\s+—\s+/, 2)[1]?.split(" · ")[0]?.trim()
+    : null;
+  const identity = (
+    [manufacturer, model].filter(Boolean).map(itemTitleText).join(" ").trim()
+    || itemTitleText(existingIdentity)
+  );
+  const existingPlace = unmarked.includes(" — ")
+    ? unmarked.split(/\s+—\s+/, 2)[1]?.split(" · ").slice(1).map(itemTitleText).filter(Boolean)
+    : [];
   const place = [
     spaceTitle ? shortDashboardLabel(spaceTitle) : null,
-    homeTitle ? shortDashboardLabel(homeTitle) : null,
-  ].filter(Boolean).map(itemTitleText).filter((value, index, values) => values.indexOf(value) === index).join(" · ");
+    homeTitle ? shortDashboardLabel(canonicalRecordTitle(homeTitle, "HM Home")) : null,
+  ].filter(Boolean).map(itemTitleText);
+  const placeParts = (place.length ? place : existingPlace)
+    .filter((value, index, values) => values.indexOf(value) === index);
   const base = [
     kind,
     identity ? `— ${identity}` : null,
-    place ? `· ${place}` : null,
+    placeParts.length ? `· ${placeParts.join(" · ")}` : null,
   ].filter(Boolean).join(" ");
   return canonicalRecordTitle(base, "HM Item");
 }
@@ -1226,14 +1231,23 @@ function referencesFromCatalog(record, key, catalog, kind = null) {
 }
 
 function canonicalRecordTitleForCatalogRecord(record, catalog) {
-  if (record.kind !== "HM Item") return canonicalRecordTitle(record.title, record.kind);
   const home = referencesFromCatalog(record, "hm-home", catalog, "HM Home")[0] ?? null;
+  const canonicalHome = home ? canonicalRecordTitle(home.title, "HM Home") : null;
+  if (record.kind === "HM Home") return canonicalRecordTitle(record.title, record.kind);
+  if (record.kind !== "HM Item") {
+    const cleanTitle = canonicalRecordTitle(record.title, record.kind);
+    if (!home || !canonicalHome) return cleanTitle;
+    const currentHome = shortDashboardLabel(home.title);
+    const parts = cleanTitle.split(" · ").map((part) => part.trim()).filter(Boolean);
+    if (parts[0] !== currentHome || currentHome === canonicalHome) return cleanTitle;
+    return [canonicalHome, ...parts.slice(1)].join(" · ");
+  }
   const space = referencesFromCatalog(record, "hm-location", catalog, "HM Space")[0] ?? null;
   return canonicalItemSearchTitle({
     title: record.title,
     manufacturer: record.manufacturer,
     model: record.model,
-    homeTitle: home?.title ?? null,
+    homeTitle: canonicalHome,
     spaceTitle: space?.title ?? null,
   });
 }
@@ -1406,7 +1420,8 @@ async function canonicalRecordTitlePlan(config) {
   return {
     ok: conflicts.length === 0,
     ready: migrations.length === 0 && conflicts.length === 0,
-    markers: Object.fromEntries(HOME_OS_KIND_MARKERS),
+    titleStyle: "plain-human",
+    legacyMarkers: Object.fromEntries(HOME_OS_LEGACY_KIND_MARKERS),
     recordCount: catalog.length,
     pendingCount: migrations.length,
     conflictCount: conflicts.length,
@@ -1433,8 +1448,9 @@ async function saveCanonicalTitleBackup(config) {
 async function ensureCanonicalRecordTitles(config) {
   const plan = await canonicalRecordTitlePlan(config);
   if (!plan.ok) {
-    fail("Home OS cannot add canonical record markers because a target title is already in use", {
-      markers: Object.fromEntries(HOME_OS_KIND_MARKERS),
+    fail("Home OS cannot normalize canonical record titles because a target title is already in use", {
+      titleStyle: "plain-human",
+      legacyMarkers: Object.fromEntries(HOME_OS_LEGACY_KIND_MARKERS),
       conflicts: plan.conflicts,
       next: "Rename the conflicting human page or block, then open Home OS again.",
     });
@@ -1466,7 +1482,8 @@ async function ensureCanonicalRecordTitles(config) {
   if (!verification.ready) fail("Home OS canonical record title verification did not pass", { verification, backup });
   await audit({
     type: "canonical-record-title-migration",
-    markers: Object.fromEntries(HOME_OS_KIND_MARKERS),
+    titleStyle: "plain-human",
+    legacyMarkers: Object.fromEntries(HOME_OS_LEGACY_KIND_MARKERS),
     migratedCount: migrated.length,
     recordUuids: migrated.map((migration) => migration.uuid),
     backup: { path: backup.path, sha256: backup.sha256, bytes: backup.bytes },
@@ -1701,7 +1718,8 @@ async function ensureDashboard(config) {
   await ensureDashboardChild(
     config,
     quickStart.node.uuid,
-    "Back on your Mac, click the connected-H **Home OS** button in the toolbar. It opens this page and processes anything new.",
+    "Back on your Mac, click the connected-H **Home OS** button. It opens **Find in Home OS** and checks for new captures.",
+    ["Back on your Mac, click the connected-H **Home OS** button in the toolbar. It opens this page and processes anything new."],
   );
 
   const sections = [
@@ -1796,7 +1814,8 @@ async function ensureDashboard(config) {
   await ensureDashboardChild(
     config,
     tips.node.uuid,
-    `In search, ${recordMarker("HM Item")} marks the canonical appliance or equipment record.`,
+    "Click the connected-H Home OS button to open **Find in Home OS**. It searches only canonical home records.",
+    ["In search, 🟢 marks the canonical appliance or equipment record."],
   );
 
   const status = await dashboardStatus(config);
@@ -3102,7 +3121,17 @@ async function installLaunchAgent({ emit = true } = {}) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
       const response = await fetch(`http://${config.bridgeHost}:${config.bridgePort}/health`, { signal: AbortSignal.timeout(250) });
-      if (response.ok) { bridgeReady = true; break; }
+      if (response.ok) {
+        const health = await response.json();
+        if (
+          health.graphName === config.graphName
+          && health.graphPath === config.graphPath
+          && health.generatorVersion === HOME_OS_GENERATOR_VERSION
+        ) {
+          bridgeReady = true;
+          break;
+        }
+      }
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -3139,7 +3168,7 @@ async function bootstrap(args) {
   const configuration = await configureCurrent(args, { emit: false });
   const logseqPlugin = await installLogseqPlugin({ emit: false });
   const launchAgent = await installLaunchAgent({ emit: false });
-  output({ ok: true, configuration, logseqPlugin, launchAgent, next: "Reload Home OS Capture in Logseq, then select the dashboard action." });
+  output({ ok: true, configuration, logseqPlugin, launchAgent, next: "Reload Home OS Capture in Logseq, then select the connected-H Home OS action." });
 }
 
 async function reinstallLocal() {
@@ -3167,6 +3196,9 @@ function processingReadiness(ok, checks) {
     && checks.recordIntegrity?.ok
     && checks.privacy?.ok
     && checks.bridge?.ok
+    && checks.bridge.graphName === checks.config?.graphName
+    && checks.bridge.graphPath === checks.config?.graphPath
+    && checks.bridge.generatorVersion === HOME_OS_GENERATOR_VERSION
     && !checks.bridge.busy
     && !checks.bridge.awaitingLogseqPlugin
   );
@@ -3237,10 +3269,10 @@ async function status() {
 }
 
 async function canonicalizeTitles(args) {
-  if (args.confirm !== "add-canonical-record-markers") {
+  if (args.confirm !== "normalize-canonical-record-titles") {
     fail("Canonical title migration confirmation is required", {
-      next: "canonicalize-titles --confirm add-canonical-record-markers",
-      note: "This renames only Home OS durable record pages so each title starts with its canonical type marker. A graph export is saved first.",
+      next: "canonicalize-titles --confirm normalize-canonical-record-titles",
+      note: "This renames only Home OS durable record pages to clean human titles, including removing legacy type emoji. A graph export is saved first.",
     });
   }
   output(await ensureCanonicalRecordTitles(loadConfig()));
@@ -3263,12 +3295,23 @@ function selfTest() {
   if (failedProcess.ok || failedProcess.handledCaptureUuids.length !== 0) fail("Failed-process receipt self-test failed", failedProcess);
 
   const readyChecks = {
+    config: {
+      graphName: "Self Test",
+      graphPath: "/tmp/home-os-self-test",
+    },
     schema: { ready: true },
     dashboard: { ready: true },
     canonicalTitles: { ready: true },
     recordIntegrity: { ok: true },
     privacy: { ok: true },
-    bridge: { ok: true, busy: false, awaitingLogseqPlugin: false },
+    bridge: {
+      ok: true,
+      graphName: "Self Test",
+      graphPath: "/tmp/home-os-self-test",
+      generatorVersion: HOME_OS_GENERATOR_VERSION,
+      busy: false,
+      awaitingLogseqPlugin: false,
+    },
   };
   if (!processingReadiness(true, readyChecks)) fail("Processing readiness positive self-test failed");
   if (processingReadiness(true, { ...readyChecks, bridge: { ...readyChecks.bridge, busy: true } })) {
@@ -3280,15 +3323,30 @@ function selfTest() {
   if (processingReadiness(true, { ...readyChecks, canonicalTitles: { ready: false } })) {
     fail("Processing readiness canonical-title self-test failed");
   }
+  if (processingReadiness(true, {
+    ...readyChecks,
+    bridge: { ...readyChecks.bridge, graphName: "Wrong Graph" },
+  })) {
+    fail("Processing readiness bridge-graph self-test failed");
+  }
+  if (processingReadiness(true, {
+    ...readyChecks,
+    bridge: { ...readyChecks.bridge, generatorVersion: "home-os/old" },
+  })) {
+    fail("Processing readiness bridge-version self-test failed");
+  }
 
-  if (canonicalRecordTitle("Home · Kitchen · Microwave", "HM Item") !== "🟢 Home · Kitchen · Microwave") {
-    fail("Canonical title marker self-test failed");
+  if (canonicalRecordTitle("Home · Kitchen · Microwave", "HM Item") !== "Home · Kitchen · Microwave") {
+    fail("Canonical plain-title self-test failed");
   }
-  if (canonicalRecordTitle("🟢 Home · Kitchen · Microwave", "HM Item") !== "🟢 Home · Kitchen · Microwave") {
-    fail("Canonical title idempotency self-test failed");
+  if (canonicalRecordTitle("🟢 Home · Kitchen · Microwave", "HM Item") !== "Home · Kitchen · Microwave") {
+    fail("Canonical legacy-marker cleanup self-test failed");
   }
-  if (canonicalRecordTitle("🟢 Home · Kitchen", "HM Space") !== "📍 Home · Kitchen") {
-    fail("Canonical title type correction self-test failed");
+  if (canonicalRecordTitle("🟢 Home · Kitchen", "HM Space") !== "Home · Kitchen") {
+    fail("Canonical wrong-marker cleanup self-test failed");
+  }
+  if (canonicalRecordTitle("🏠 Home", "HM Home") !== "My home") {
+    fail("Canonical generic-home collision self-test failed");
   }
   const itemSearchTitle = canonicalItemSearchTitle({
     title: "Home · Kitchen · KitchenAid KMHC319LSS00 Microwave",
@@ -3297,7 +3355,7 @@ function selfTest() {
     homeTitle: "🏠 Home",
     spaceTitle: "📍 Home · Kitchen",
   });
-  if (itemSearchTitle !== "🟢 Microwave — KitchenAid KMHC319LSS00 · Kitchen · Home") {
+  if (itemSearchTitle !== "Microwave — KitchenAid KMHC319LSS00 · Kitchen · My home") {
     fail("Item-first canonical title self-test failed", { itemSearchTitle });
   }
   const slashModelSearchTitle = canonicalItemSearchTitle({
@@ -3307,7 +3365,7 @@ function selfTest() {
     homeTitle: "🏠 Home",
     spaceTitle: "📍 Home · Kitchen",
   });
-  if (slashModelSearchTitle !== "🟢 Refrigerator — LG LFXS29766S∕00 · Kitchen · Home") {
+  if (slashModelSearchTitle !== "Refrigerator — LG LFXS29766S∕00 · Kitchen · My home") {
     fail("Item title namespace-safety self-test failed", { slashModelSearchTitle });
   }
   if (itemDashboardLabel(itemSearchTitle, "KitchenAid", "KMHC319LSS00") !== "KitchenAid Microwave · KMHC319LSS00") {
@@ -3491,9 +3549,12 @@ function selfTest() {
       "processing-busy-blocked",
       "processing-setup-blocked",
       "processing-canonical-title-blocked",
-      "canonical-title-marker",
-      "canonical-title-idempotent",
-      "canonical-title-type-correction",
+      "processing-bridge-graph-blocked",
+      "processing-bridge-version-blocked",
+      "canonical-title-plain",
+      "canonical-title-legacy-marker-cleanup",
+      "canonical-title-wrong-marker-cleanup",
+      "canonical-title-generic-home-collision",
       "canonical-title-item-first",
       "canonical-title-item-namespace-safe",
       "canonical-title-item-first-dashboard-label",
@@ -3718,6 +3779,9 @@ async function serve() {
       response.end(JSON.stringify({
         ok: true,
         running: true,
+        graphName: config.graphName,
+        graphPath: config.graphPath,
+        generatorVersion: HOME_OS_GENERATOR_VERSION,
         autoRun: config.autoRun,
         busy: running || setupRunning,
         processing: running,
@@ -3761,8 +3825,19 @@ async function serve() {
       await audit({ type: "event", reason });
       if (reason === "manual") {
         if (running || setupRunning) {
+          pending = true;
+          pendingReason = "manual";
+          scheduledRunId ??= randomBytes(8).toString("hex");
           response.writeHead(200, { "Content-Type": "application/json" });
-          response.end(JSON.stringify({ ok: true, busy: true, processing: running, setupRunning, activeRun }));
+          response.end(JSON.stringify({
+            ok: true,
+            busy: true,
+            queued: true,
+            runId: scheduledRunId,
+            processing: running,
+            setupRunning,
+            activeRun,
+          }));
           return;
         }
         const schema = await schemaReadiness(config);
@@ -3906,7 +3981,8 @@ async function serve() {
         setupRunning = false;
         if (pending) {
           pending = false;
-          schedule("manual");
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(processEvent, 50);
         }
       }
       return;
@@ -3968,7 +4044,7 @@ async function serve() {
       response.writeHead(logseqUnavailable ? 503 : 500, { "Content-Type": "application/json" });
       response.end(JSON.stringify({
         error: logseqUnavailable ? "Logseq is temporarily unavailable" : "Home OS request failed",
-        message: logseqUnavailable ? "Logseq is restarting. Your setup and captures are safe; try the dashboard action again in a moment." : "Home OS stopped safely. Your captures were not changed.",
+        message: logseqUnavailable ? "Logseq is restarting. Your setup and captures are safe; try the connected-H Home OS action again in a moment." : "Home OS stopped safely. Your captures were not changed.",
       }));
     });
   });
@@ -4033,7 +4109,7 @@ async function main() {
       "dashboard",
       "dashboard-repair --confirm remove-duplicate-generated-dashboard-nodes",
       "canonical-title-audit",
-      "canonicalize-titles --confirm add-canonical-record-markers",
+      "canonicalize-titles --confirm normalize-canonical-record-titles",
       "serial-audit",
       "record-audit",
       "privacy-audit",

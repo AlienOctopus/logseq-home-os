@@ -3248,6 +3248,76 @@
 
   // src/main.js
   var import_libs = __toESM(require_lsplugin_user());
+
+  // src/finder.mjs
+  var LEGACY_MARKERS = ["\u{1F3E0}", "\u{1F4CD}", "\u2699\uFE0F", "\u{1F7E2}", "\u{1F4C4}"];
+  var FINDER_KINDS = Object.freeze([
+    { tag: "HM Home", label: "Home", order: 0 },
+    { tag: "HM Space", label: "Room or area", order: 1 },
+    { tag: "HM System", label: "Home system", order: 2 },
+    { tag: "HM Item", label: "Appliance or equipment", order: 3 },
+    { tag: "HM Document", label: "Manual or record", order: 4 }
+  ]);
+  function stripLegacyMarker(value) {
+    let title = String(value ?? "").trim();
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const marker of LEGACY_MARKERS) {
+        if (!title.startsWith(marker)) continue;
+        title = title.slice(marker.length).trimStart();
+        changed = true;
+        break;
+      }
+    }
+    return title;
+  }
+  function finderRecord({ uuid, title, kind }) {
+    const sourceTitle = String(title ?? "").trim();
+    const cleanTitle = stripLegacyMarker(sourceTitle);
+    const parts = cleanTitle.split(" \xB7 ").map((part) => part.trim()).filter(Boolean);
+    let primary = parts.at(-1) || cleanTitle || "Untitled record";
+    let detailParts = parts.slice(0, -1);
+    if (kind === "HM Item" && cleanTitle.includes(" \u2014 ")) {
+      const [objectName, identityAndLocation] = cleanTitle.split(/\s+—\s+/, 2);
+      const identityParts = String(identityAndLocation ?? "").split(" \xB7 ").map((part) => part.trim()).filter(Boolean);
+      primary = objectName.trim() || primary;
+      detailParts = identityParts;
+    }
+    const definition = FINDER_KINDS.find((candidate) => candidate.tag === kind) ?? { tag: kind, label: "Home record", order: FINDER_KINDS.length };
+    const detail = detailParts.join(" \xB7 ") || definition.label;
+    return {
+      uuid: String(uuid ?? ""),
+      sourceTitle,
+      title: cleanTitle,
+      kind,
+      kindLabel: definition.label,
+      kindOrder: definition.order,
+      primary,
+      detail,
+      searchText: normalizeSearchText([cleanTitle, primary, detail, definition.label].join(" "))
+    };
+  }
+  function normalizeSearchText(value) {
+    return String(value ?? "").normalize("NFKD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase().replace(/[^\p{Letter}\p{Number}]+/gu, " ").trim();
+  }
+  function finderScore(record, query) {
+    const primary = normalizeSearchText(record.primary);
+    const title = normalizeSearchText(record.title);
+    if (!query) return 100 + record.kindOrder;
+    if (primary === query) return 0;
+    if (primary.startsWith(query)) return 10;
+    if (title.startsWith(query)) return 20;
+    if (primary.includes(query)) return 30;
+    return 40;
+  }
+  function filterFinderRecords(records, query) {
+    const normalizedQuery = normalizeSearchText(query);
+    const tokens = normalizedQuery.split(" ").filter(Boolean);
+    return records.filter((record) => tokens.every((token) => record.searchText.includes(token))).sort((left, right) => finderScore(left, normalizedQuery) - finderScore(right, normalizedQuery) || left.kindOrder - right.kindOrder || left.primary.localeCompare(right.primary) || left.detail.localeCompare(right.detail));
+  }
+
+  // src/main.js
   var DEFAULTS = {
     bridgeUrl: "http://127.0.0.1:32145",
     bridgeSecret: "",
@@ -3257,6 +3327,10 @@
   var timer = null;
   var setupContext = null;
   var stopChangeListener = null;
+  var finderRecords = [];
+  var visibleFinderRecords = [];
+  var activeFinderIndex = -1;
+  var finderRequestId = 0;
   var LOCAL_README_DIALOG_FIX = `
   .ui__dialog-content[label="plugin-readme"] {
     width: min(900px, calc(100vw - 4rem)) !important;
@@ -3342,6 +3416,7 @@
   }
   function setupElements() {
     return {
+      dialog: document.getElementById("home-os-setup-dialog"),
       title: document.getElementById("home-os-title"),
       lede: document.getElementById("home-os-lede"),
       details: document.getElementById("home-os-details"),
@@ -3349,6 +3424,167 @@
       setup: document.getElementById("home-os-setup"),
       cancel: document.getElementById("home-os-cancel")
     };
+  }
+  function finderElements() {
+    return {
+      dialog: document.getElementById("home-os-finder"),
+      close: document.getElementById("home-os-finder-close"),
+      query: document.getElementById("home-os-finder-query"),
+      count: document.getElementById("home-os-finder-count"),
+      notice: document.getElementById("home-os-finder-notice"),
+      results: document.getElementById("home-os-finder-results"),
+      empty: document.getElementById("home-os-finder-empty"),
+      emptyTitle: document.getElementById("home-os-finder-empty-title"),
+      emptyDetail: document.getElementById("home-os-finder-empty-detail"),
+      process: document.getElementById("home-os-finder-process"),
+      dashboard: document.getElementById("home-os-finder-dashboard")
+    };
+  }
+  function nodeTitle(node) {
+    return node?.fullTitle || node?.title || node?.content || node?.name || "";
+  }
+  async function loadFinderRecords() {
+    const recordsByUuid = /* @__PURE__ */ new Map();
+    const taggedRecords = await Promise.all(FINDER_KINDS.map(async ({ tag }) => {
+      try {
+        return { tag, nodes: await logseq.Editor.getTagObjects(tag) };
+      } catch (error) {
+        console.warn(`Home OS Finder could not load ${tag}`, error);
+        return { tag, nodes: [] };
+      }
+    }));
+    for (const { tag, nodes } of taggedRecords) {
+      for (const node of nodes || []) {
+        if (!node?.uuid || !nodeTitle(node) || recordsByUuid.has(node.uuid)) continue;
+        recordsByUuid.set(node.uuid, finderRecord({
+          uuid: node.uuid,
+          title: nodeTitle(node),
+          kind: tag
+        }));
+      }
+    }
+    return [...recordsByUuid.values()];
+  }
+  function finderIcon(kind) {
+    if (kind === "HM Home") {
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M9 20v-6h6v6"/></svg>`;
+    }
+    if (kind === "HM Space") {
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s6-5.1 6-11a6 6 0 10-12 0c0 5.9 6 11 6 11z"/><circle cx="12" cy="10" r="2"/></svg>`;
+    }
+    if (kind === "HM System") {
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7.7 7.2l3.2 8.7M16.3 7.2l-3.2 8.7M8 6h8"/></svg>`;
+    }
+    if (kind === "HM Document") {
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h4M9 13h6M9 17h5"/></svg>`;
+    }
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 9h8M8 13h3M15 13h1M8 17h8"/></svg>`;
+  }
+  function updateActiveFinderResult(nextIndex, { focus = false } = {}) {
+    const buttons = [...finderElements().results.querySelectorAll(".finder-result")];
+    if (buttons.length === 0) {
+      activeFinderIndex = -1;
+      finderElements().query.removeAttribute("aria-activedescendant");
+      return;
+    }
+    activeFinderIndex = Math.max(0, Math.min(nextIndex, buttons.length - 1));
+    buttons.forEach((button, index) => {
+      const active2 = index === activeFinderIndex;
+      button.classList.toggle("active", active2);
+      button.setAttribute("aria-selected", String(active2));
+    });
+    const active = buttons[activeFinderIndex];
+    finderElements().query.setAttribute("aria-activedescendant", active.id);
+    active.scrollIntoView({ block: "nearest" });
+    if (focus) active.focus();
+  }
+  function renderFinderResults() {
+    const elements = finderElements();
+    visibleFinderRecords = filterFinderRecords(finderRecords, elements.query.value);
+    elements.results.replaceChildren();
+    elements.count.textContent = elements.query.value.trim() ? `${visibleFinderRecords.length} match${visibleFinderRecords.length === 1 ? "" : "es"}` : `${visibleFinderRecords.length} home record${visibleFinderRecords.length === 1 ? "" : "s"}`;
+    for (const [index, record] of visibleFinderRecords.entries()) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "finder-result";
+      button.id = `home-os-finder-result-${index}`;
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", "false");
+      button.setAttribute("aria-label", `${record.primary}, ${record.kindLabel}, ${record.detail}`);
+      const icon = document.createElement("span");
+      icon.className = "finder-result-icon";
+      icon.innerHTML = finderIcon(record.kind);
+      const copy = document.createElement("span");
+      copy.className = "finder-result-copy";
+      const primary = document.createElement("strong");
+      primary.textContent = record.primary;
+      const detail = document.createElement("span");
+      detail.textContent = record.detail;
+      copy.append(primary, detail);
+      const kind = document.createElement("span");
+      kind.className = "finder-kind";
+      kind.textContent = record.kindLabel;
+      const chevron = document.createElement("span");
+      chevron.className = "finder-chevron";
+      chevron.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
+      button.append(icon, copy, kind, chevron);
+      button.addEventListener("mouseenter", () => updateActiveFinderResult(index));
+      button.addEventListener("focus", () => updateActiveFinderResult(index));
+      button.addEventListener("click", () => openFinderRecord(record));
+      elements.results.append(button);
+    }
+    const empty = visibleFinderRecords.length === 0;
+    elements.results.hidden = empty;
+    elements.empty.hidden = !empty;
+    elements.emptyTitle.textContent = elements.query.value.trim() ? "No matching home records" : "No Home OS records yet";
+    elements.emptyDetail.textContent = elements.query.value.trim() ? "Try an appliance, room, manufacturer, model, system, or document name." : "Add a #HomeCapture in your Journal, then process it from this window.";
+    updateActiveFinderResult(empty ? -1 : 0);
+  }
+  function showFinderDialog(records, { companionAvailable = true } = {}) {
+    const setup = setupElements();
+    const finder = finderElements();
+    setup.dialog.hidden = true;
+    finder.dialog.hidden = false;
+    finderRecords = records;
+    finder.query.value = "";
+    finder.query.disabled = false;
+    finder.notice.hidden = companionAvailable;
+    finder.notice.textContent = companionAvailable ? "" : "Your records are available, but capture processing is offline on this Mac.";
+    finder.process.disabled = !companionAvailable;
+    finder.dashboard.disabled = false;
+    renderFinderResults();
+    logseq.setMainUIInlineStyle({ position: "fixed", inset: "0", width: "100vw", height: "100vh", zIndex: 1e3 });
+    logseq.showMainUI({ autoFocus: true });
+    window.setTimeout(() => finder.query.focus(), 40);
+  }
+  function showFinderLoading() {
+    const setup = setupElements();
+    const finder = finderElements();
+    setup.dialog.hidden = true;
+    finder.dialog.hidden = false;
+    finderRecords = [];
+    visibleFinderRecords = [];
+    activeFinderIndex = -1;
+    finder.query.value = "";
+    finder.query.disabled = true;
+    finder.count.textContent = "Loading home records\u2026";
+    finder.notice.hidden = true;
+    finder.results.replaceChildren();
+    finder.results.hidden = true;
+    finder.empty.hidden = true;
+    finder.process.disabled = true;
+    finder.dashboard.disabled = true;
+    logseq.setMainUIInlineStyle({ position: "fixed", inset: "0", width: "100vw", height: "100vh", zIndex: 1e3 });
+    logseq.showMainUI({ autoFocus: true });
+  }
+  function hideFinderDialog() {
+    finderRequestId += 1;
+    finderElements().dialog.hidden = true;
+    logseq.hideMainUI({ restoreEditingCursor: true });
+  }
+  async function openFinderRecord(record) {
+    hideFinderDialog();
+    logseq.App.pushState("page", { name: record.sourceTitle || record.title });
   }
   function captureLabel(count) {
     if (count === 1) return "1 capture waiting";
@@ -3362,7 +3598,9 @@
   }
   function showSetupDialog(payload) {
     setupContext = payload;
-    const { title, lede, details, setup, cancel, status } = setupElements();
+    const { dialog, title, lede, details, setup, cancel, status } = setupElements();
+    finderElements().dialog.hidden = true;
+    dialog.hidden = false;
     const pending = Number(payload.pendingCaptureCount || 0);
     const summary = payload.plan?.summary || {};
     const blocked = payload.plan && payload.plan.ok === false;
@@ -3382,6 +3620,7 @@
   function hideSetupDialog() {
     if (setupElements().setup.disabled && setupElements().cancel.disabled) return;
     setupContext = null;
+    setupElements().dialog.hidden = true;
     logseq.hideMainUI({ restoreEditingCursor: true });
   }
   async function applyClientSchemaOperations(operations) {
@@ -3430,24 +3669,25 @@
       cancel.disabled = false;
     }
   }
-  async function notifyBridge(reason, visible) {
+  async function notifyBridge(reason, visible, { quietUpToDate = false } = {}) {
     try {
       const payload = await bridgeRequest("/events", { reason });
       if (visible && payload.setupRequired) {
         showSetupDialog(payload);
         return;
       }
-      if (visible && payload.busy) {
+      if (visible && payload.busy && !payload.queued) {
         logseq.UI.showMsg("Home OS is already processing a capture. You can keep using Logseq.", "warning");
         return;
       }
-      if (visible && payload.outcome === "up_to_date") {
+      if (visible && payload.outcome === "up_to_date" && !quietUpToDate) {
         logseq.UI.showMsg("Home OS is up to date. No new captures.", "success");
         return;
       }
       if (visible && payload.queued) {
         const count = Number(payload.changedCount || 0);
-        logseq.UI.showMsg(`Processing ${count} capture${count === 1 ? "" : "s"} now. This can take a few minutes.`, "success");
+        const message = payload.busy ? "Finishing the current check, then processing your captures." : `Processing ${count} capture${count === 1 ? "" : "s"} now. This can take a few minutes.`;
+        logseq.UI.showMsg(message, "success");
         void waitForRun(payload.runId);
       }
       return payload;
@@ -3456,18 +3696,57 @@
       console.warn("Home OS bridge notification failed", error);
     }
   }
-  async function openHomeOs() {
+  async function openDashboard() {
+    const openedFromFinder = !finderElements().dialog.hidden;
+    if (openedFromFinder) {
+      hideFinderDialog();
+      logseq.App.pushState("page", { name: "Home OS" });
+    }
     try {
       const payload = await bridgeRequest("/dashboard", {});
       if (payload.setupRequired) {
         showSetupDialog(payload);
         return;
       }
-      logseq.App.pushState("page", { name: payload.dashboard?.title || "Home OS" });
+      if (!openedFromFinder) {
+        logseq.App.pushState("page", { name: payload.dashboard?.title || "Home OS" });
+      }
       await notifyBridge("manual", true);
     } catch (error) {
       logseq.UI.showMsg("Home OS is not running on this Mac. Your Logseq data is unchanged.", "warning");
       console.warn("Home OS dashboard could not open", error);
+    }
+  }
+  async function openFinder() {
+    const requestId = finderRequestId + 1;
+    finderRequestId = requestId;
+    showFinderLoading();
+    let companionAvailable = true;
+    let payload = null;
+    try {
+      payload = await bridgeRequest("/dashboard", {});
+      if (requestId !== finderRequestId) return;
+      if (payload.setupRequired) {
+        showSetupDialog(payload);
+        return;
+      }
+    } catch (error) {
+      companionAvailable = false;
+      console.warn("Home OS companion is unavailable; opening the local record finder", error);
+    }
+    if (requestId !== finderRequestId) return;
+    const records = await loadFinderRecords();
+    if (requestId !== finderRequestId) return;
+    showFinderDialog(records, { companionAvailable });
+    if (companionAvailable) void notifyBridge("manual", true, { quietUpToDate: true });
+  }
+  async function processFromFinder() {
+    const process = finderElements().process;
+    process.disabled = true;
+    try {
+      await notifyBridge("manual", true);
+    } finally {
+      process.disabled = false;
     }
   }
   function scheduleChangeCheck() {
@@ -3483,16 +3762,49 @@
     logseq.hideMainUI();
     setupElements().setup.addEventListener("click", installAndProcess);
     setupElements().cancel.addEventListener("click", hideSetupDialog);
+    finderElements().close.addEventListener("click", hideFinderDialog);
+    finderElements().query.addEventListener("input", renderFinderResults);
+    finderElements().process.addEventListener("click", processFromFinder);
+    finderElements().dashboard.addEventListener("click", openDashboard);
+    document.getElementById("home-os-main").addEventListener("click", (event) => {
+      if (event.target !== event.currentTarget) return;
+      if (!finderElements().dialog.hidden) hideFinderDialog();
+    });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") hideSetupDialog();
+      if (event.key === "Escape") {
+        if (!finderElements().dialog.hidden) hideFinderDialog();
+        else hideSetupDialog();
+        return;
+      }
+      if (finderElements().dialog.hidden) return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        updateActiveFinderResult(activeFinderIndex + 1);
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        updateActiveFinderResult(activeFinderIndex - 1);
+      }
+      if (event.key === "Enter" && visibleFinderRecords[activeFinderIndex]) {
+        event.preventDefault();
+        void openFinderRecord(visibleFinderRecords[activeFinderIndex]);
+      }
     });
     logseq.provideModel({
-      openHomeOs,
+      openFinder,
+      openDashboard,
       processHomeOs: () => notifyBridge("manual", true)
     });
     logseq.App.registerCommandPalette(
       { key: "home-os-open-dashboard", label: "Home OS: Open dashboard" },
-      openHomeOs
+      openDashboard
+    );
+    logseq.App.registerCommandPalette(
+      {
+        key: "home-os-find-record",
+        label: "Home OS: Find a record"
+      },
+      openFinder
     );
     logseq.App.registerCommandPalette(
       { key: "home-os-process-captures", label: "Home OS: Process new captures" },
@@ -3500,10 +3812,10 @@
     );
     logseq.App.registerUIItem("toolbar", {
       // Keep the legacy toolbar key so an already-pinned Home OS action becomes
-      // the dashboard button after upgrading instead of silently disappearing.
+      // the Finder button after upgrading instead of silently disappearing.
       key: "home-os-process-captures",
       template: `
-      <a class="button" data-on-click="openHomeOs" title="Open Home OS" aria-label="Open Home OS">
+      <a class="button" data-on-click="openFinder" title="Find in Home OS" aria-label="Find in Home OS">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 7v10M18 7v10M8 12h8" />
           <circle cx="6" cy="5" r="2" fill="currentColor" stroke="none" />

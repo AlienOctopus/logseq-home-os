@@ -23,9 +23,9 @@
   },
   "record": {
     "kind": "HM Item",
-    "title": "🟢 Item — Manufacturer Model · Space · My home",
-    "homeTitle": "🏠 My home",
-    "spaceTitle": "📍 My home · Space",
+    "title": "Item — Manufacturer Model · Space · My home",
+    "homeTitle": "My home",
+    "spaceTitle": "My home · Space",
     "category": "Appliance",
     "manufacturer": "Manufacturer when supported",
     "model": "Exact model when supported",
